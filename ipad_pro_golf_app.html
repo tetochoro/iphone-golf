@@ -40,21 +40,21 @@
   #controls {
     flex: 0 0 auto; background: #1e1e1e; padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
   }
-  .row { display: flex; align-items: center; gap: 10px; margin: 6px 0; flex-wrap: nowrap; }
+  .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
   .row.split > div { flex: 1 1 0; min-width: 0; }
-  label.small { font-size: 14px; color: #00e5ff; display: block; margin-bottom: 2px; }
+  label.small { font-size: 12px; color: #00e5ff; display: block; margin-bottom: 2px; }
   input[type=range] {
-    width: 100%; height: 34px; -webkit-appearance: none; background: transparent;
+    width: 100%; height: 28px; -webkit-appearance: none; background: transparent;
   }
   input[type=range]::-webkit-slider-runnable-track {
-    height: 10px; background: #555; border-radius: 5px;
+    height: 8px; background: #555; border-radius: 4px;
   }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 32px; height: 32px; border-radius: 50%;
-    background: #fff; border: 3px solid #000; margin-top: -11px;
+    -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; border: 2px solid #000; margin-top: -9px;
   }
   button {
-    font-size: 17px; padding: 12px 18px; border: none; border-radius: 12px;
+    font-size: 13px; padding: 7px 10px; border: none; border-radius: 9px;
     background: #424242; color: #fff; white-space: nowrap;
   }
   button:active { filter: brightness(1.3); }
@@ -62,11 +62,11 @@
   button.danger { background: #d32f2f; }
   button.live { background: #0288d1; }
   .colorBtn {
-    width: 40px; height: 40px; border-radius: 50%; border: 3px solid #888; padding: 0;
+    width: 28px; height: 28px; border-radius: 50%; border: 2px solid #888; padding: 0;
     flex: 0 0 auto;
   }
   .colorBtn.selected { border-color: #fff; }
-  #colorRow { flex-wrap: nowrap; }
+  #colorRow { flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -96,7 +96,7 @@
       <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
       <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
       <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
-      <button id="btnRec" class="rec" style="margin-left:auto;">🔴 10秒録画</button>
+      <button id="btnRec" class="rec">🔴 10秒録画</button>
       <button id="btnPlay">⏯ 再生/停止</button>
       <button id="btnPrev">◀戻る</button>
       <button id="btnNext">進む▶</button>
