@@ -210,7 +210,8 @@ function drawSourceToDisplay(source, srcW, srcH) {
   dctx.fillStyle = "#000";
   dctx.fillRect(0, 0, w, h);
   if (srcW > 0 && srcH > 0) {
-    const scale = Math.min(w / srcW, h / srcH);
+    // 画面いっぱいに埋める(はみ出た部分は自動的に切れる。縦横比は保つので歪まない)
+    const scale = Math.max(w / srcW, h / srcH);
     const dw = srcW * scale;
     const dh = srcH * scale;
     const dx = (w - dw) / 2;
@@ -228,8 +229,8 @@ function drawToDisplay(img) {
   dctx.fillStyle = "#000";
   dctx.fillRect(0, 0, w, h);
   if (img.complete && img.naturalWidth > 0) {
-    // 縦横比を保ったまま、はみ出さないように収める(contain)
-    const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+    // 画面いっぱいに埋める(はみ出た部分は自動的に切れる。縦横比は保つので歪まない)
+    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
     const dw = img.naturalWidth * scale;
     const dh = img.naturalHeight * scale;
     const dx = (w - dw) / 2;
