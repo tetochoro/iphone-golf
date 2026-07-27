@@ -127,8 +127,8 @@ const BUFFER_SECONDS = MAX_RECORD_SECONDS + 3;
 const JPEG_QUALITY = 0.85;
 
 // --- 音検知による自動録画(インパクト音トリガー) ---
-const PRE_SECONDS = 5.0;             // 音を検知した瞬間より「前」何秒を含めるか
-const POST_SECONDS = 5.0;            // 音を検知した瞬間より「後」何秒を含めるか
+const PRE_SECONDS = 3.0;             // 音を検知した瞬間より「前」何秒を含めるか
+const POST_SECONDS = 3.0;            // 音を検知した瞬間より「後」何秒を含めるか
 const TRIGGER_COOLDOWN_SECONDS = 3.0; // 1回検知したら最低何秒は次の検知をしないか
 const SOUND_THRESHOLD_DEFAULT = 20;  // 初期のしきい値(0〜100、環境により調整)
 
