@@ -54,7 +54,7 @@
     background: #fff; border: 2px solid #000; margin-top: -9px;
   }
   button {
-    font-size: 13px; padding: 7px 10px; border: none; border-radius: 9px;
+    font-size: 12px; padding: 6px 8px; border: none; border-radius: 8px;
     background: #424242; color: #fff; white-space: nowrap;
   }
   button:active { filter: brightness(1.3); }
@@ -96,12 +96,22 @@
       <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
       <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
       <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
-      <button id="btnRec" class="rec">🔴 10秒録画</button>
-      <button id="btnPlay">⏯ 再生/停止</button>
-      <button id="btnPrev">◀戻る</button>
-      <button id="btnNext">進む▶</button>
-      <button id="btnClear" class="danger">🧹消す</button>
-      <button id="btnLive" class="live">📹ライブ</button>
+      <button id="btnRec" class="rec">🔴10秒</button>
+      <button id="btnPlay">⏯</button>
+      <button id="btnPrev">◀</button>
+      <button id="btnNext">▶</button>
+      <button id="btnClear" class="danger">🧹</button>
+      <button id="btnLive" class="live">📹</button>
+
+      <label style="display:flex; align-items:center; gap:2px; font-size:11px; color:#00e5ff; white-space:nowrap;">
+        <input type="checkbox" id="chkSound" style="width:14px;height:14px;">
+        🔊
+      </label>
+      <select id="micSelect" style="font-size:10px; padding:2px; border-radius:5px; background:#333; color:#fff; border:1px solid #555; max-width:90px;">
+        <option value="">マイク</option>
+      </select>
+      <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20" style="width:60px;">
+      <span id="volumeLabel" style="font-size:9px; color:#aaa; white-space:nowrap;">0/20</span>
     </div>
   </div>
 </div>
@@ -115,6 +125,12 @@ const PLAYBACK_SPEED = 0.5;      // 0.5 = 1/2スロー再生
 const CAPTURE_FPS = 30;          // iPhoneカメラの想定fps(内部バッファの粒度)
 const BUFFER_SECONDS = MAX_RECORD_SECONDS + 3;
 const JPEG_QUALITY = 0.85;
+
+// --- 音検知による自動録画(インパクト音トリガー) ---
+const PRE_SECONDS = 5.0;             // 音を検知した瞬間より「前」何秒を含めるか
+const POST_SECONDS = 5.0;            // 音を検知した瞬間より「後」何秒を含めるか
+const TRIGGER_COOLDOWN_SECONDS = 3.0; // 1回検知したら最低何秒は次の検知をしないか
+const SOUND_THRESHOLD_DEFAULT = 20;  // 初期のしきい値(0〜100、環境により調整)
 
 // ================= 状態変数 =================
 let state = "LIVE";              // LIVE / RECORDING / REVIEW
@@ -134,6 +150,19 @@ let lines = [];                  // {x1,y1,x2,y2,color}
 let drawing = false;
 let lastX = 0, lastY = 0;
 
+// ---- 音検知関連 ----
+let soundEnabled = false;
+let soundThreshold = SOUND_THRESHOLD_DEFAULT;
+let currentVolume = 0;
+let soundTriggerTs = null;       // 検知した瞬間の時刻(後半録画待ち中はnull以外)
+let lastTriggerTime = 0;
+let audioCtx = null;
+let analyser = null;
+let micStream = null;
+let micSourceNode = null;
+let volumeDataArray = null;
+let selectedMicId = null;
+
 // ================= DOM =================
 const video = document.getElementById("video");
 const displayCanvas = document.getElementById("displayCanvas");
@@ -150,6 +179,10 @@ const btnPrev = document.getElementById("btnPrev");
 const btnNext = document.getElementById("btnNext");
 const btnClear = document.getElementById("btnClear");
 const btnLive = document.getElementById("btnLive");
+const chkSound = document.getElementById("chkSound");
+const micSelect = document.getElementById("micSelect");
+const thresholdSlider = document.getElementById("thresholdSlider");
+const volumeLabel = document.getElementById("volumeLabel");
 
 // オフスクリーンキャプチャ用(実際の画素取得・JPEG圧縮に使う)
 const captureCanvas = document.createElement("canvas");
@@ -174,6 +207,143 @@ async function startCamera() {
   }
 }
 
+// ================= 音検知(マイク入力)関連 =================
+async function listMics() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter(d => d.kind === "audioinput");
+    micSelect.innerHTML = "";
+    mics.forEach((d, i) => {
+      const opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `マイク ${i + 1}`;
+      micSelect.appendChild(opt);
+    });
+    // 名前に "Bluetooth" 等を含むデバイスがあれば自動選択する
+    const btIdx = mics.findIndex(d => /bluetooth|freebuds|airpods|headset/i.test(d.label));
+    if (btIdx >= 0) {
+      micSelect.value = mics[btIdx].deviceId;
+      selectedMicId = mics[btIdx].deviceId;
+    } else if (mics.length > 0) {
+      selectedMicId = mics[0].deviceId;
+    }
+  } catch (e) {
+    console.warn("マイク一覧の取得に失敗:", e);
+  }
+}
+
+async function startMic() {
+  stopMic();
+  try {
+    const constraints = {
+      audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
+    };
+    micStream = await navigator.mediaDevices.getUserMedia(constraints);
+    // ラベル取得のため、権限が下りた後にもう一度デバイス一覧を更新する
+    await listMics();
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micSourceNode = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    volumeDataArray = new Uint8Array(analyser.frequencyBinCount);
+    micSourceNode.connect(analyser);
+    requestAnimationFrame(pollVolume);
+  } catch (e) {
+    setStatus("マイクを起動できませんでした: " + e.message, "#ff5555");
+    chkSound.checked = false;
+    soundEnabled = false;
+  }
+}
+
+function stopMic() {
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
+  }
+  analyser = null;
+}
+
+function pollVolume() {
+  if (analyser && volumeDataArray) {
+    analyser.getByteTimeDomainData(volumeDataArray);
+    let sumSquares = 0;
+    for (let i = 0; i < volumeDataArray.length; i++) {
+      const v = (volumeDataArray[i] - 128) / 128;
+      sumSquares += v * v;
+    }
+    const rms = Math.sqrt(sumSquares / volumeDataArray.length);
+    currentVolume = rms * 300; // 見やすいスケール(0〜100程度)に変換
+    volumeLabel.textContent = `${currentVolume.toFixed(0)}/${soundThreshold}`;
+
+    const now = Date.now() / 1000;
+    if (soundEnabled && soundTriggerTs === null
+        && currentVolume > soundThreshold
+        && (now - lastTriggerTime) > TRIGGER_COOLDOWN_SECONDS) {
+      lastTriggerTime = now;
+      soundTriggerTs = now;
+      // 検知した瞬間、再生中だったら止めてライブ表示に切り替える
+      stopPlayTimer();
+      isPlaying = false;
+    }
+  }
+  if (soundEnabled) requestAnimationFrame(pollVolume);
+}
+
+function finishSoundClip() {
+  const triggerTs = soundTriggerTs;
+  const windowStart = triggerTs - PRE_SECONDS;
+  const windowEnd = triggerTs + POST_SECONDS;
+  const windowFrames = buffer.filter(f => f.ts >= windowStart && f.ts <= windowEnd);
+
+  soundTriggerTs = null; // 次の検知を受け付けられるようにする
+
+  if (windowFrames.length === 0) {
+    state = "LIVE";
+    return;
+  }
+
+  reviewFrames = windowFrames.map(f => ({ img: f.img, ts: f.ts }));
+
+  if (reviewFrames.length >= 2) {
+    const elapsed = reviewFrames[reviewFrames.length - 1].ts - reviewFrames[0].ts;
+    const realIntervalMs = (elapsed / (reviewFrames.length - 1)) * 1000;
+    reviewIntervalMs = Math.max(1, realIntervalMs / PLAYBACK_SPEED);
+  } else {
+    reviewIntervalMs = 1000 / (CAPTURE_FPS * PLAYBACK_SPEED);
+  }
+
+  reviewIdx = 0;
+  isPlaying = true;
+  lines = [];
+  seekSlider.max = String(reviewFrames.length - 1);
+  seekSlider.value = "0";
+  state = "REVIEW";
+  startPlayTimer();
+}
+
+chkSound.addEventListener("change", () => {
+  soundEnabled = chkSound.checked;
+  if (soundEnabled) {
+    startMic();
+  } else {
+    stopMic();
+  }
+});
+
+micSelect.addEventListener("change", () => {
+  selectedMicId = micSelect.value;
+  if (soundEnabled) startMic();
+});
+
+thresholdSlider.addEventListener("input", () => {
+  soundThreshold = parseInt(thresholdSlider.value, 10);
+});
+
 // ================= 常時キャプチャ(ローリングバッファ) =================
 let lastCaptureTime = 0;
 function captureLoop(ts) {
@@ -183,10 +353,10 @@ function captureLoop(ts) {
     lastCaptureTime = now;
     cctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
 
-    // ライブ表示(LIVE・RECORDING中)は、JPEG化された画像の読み込み待ちを
-    // 挟まず、今まさに描画したキャプチャ用キャンバスから直接・同期的に
-    // 表示する(これで読み込み待ちによる黒画面を防げる)
-    if (state === "LIVE" || state === "RECORDING") {
+    // ライブ表示(LIVE・RECORDING中、および音検知の後半録画待ち中)は、
+    // JPEG化された画像の読み込み待ちを挟まず、今まさに描画したキャプチャ用
+    // キャンバスから直接・同期的に表示する(読み込み待ちによる黒画面を防ぐ)
+    if (state === "LIVE" || state === "RECORDING" || soundTriggerTs !== null) {
       drawSourceToDisplay(captureCanvas, captureCanvas.width, captureCanvas.height);
     }
 
@@ -410,7 +580,14 @@ function setStatus(text, color) {
 
 // ================= 録画時間の監視ループ =================
 function recordWatchLoop() {
-  if (state === "RECORDING") {
+  if (soundTriggerTs !== null) {
+    const elapsed = Date.now() / 1000 - soundTriggerTs;
+    const remaining = Math.max(0, POST_SECONDS - elapsed);
+    setStatus(`🔊検知! 収録中... 残り ${remaining.toFixed(1)} 秒`, "#ff9100");
+    if (elapsed >= POST_SECONDS) {
+      finishSoundClip();
+    }
+  } else if (state === "RECORDING") {
     const elapsed = Date.now() / 1000 - recStartTime;
     const remaining = Math.max(0, recordSeconds - elapsed);
     setStatus(`🔴 録画中... 残り ${remaining.toFixed(1)} 秒`, "#ff3d00");
