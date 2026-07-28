@@ -71,10 +71,12 @@
       <h2>② このコードをiPadに送ってください(コピー)</h2>
       <textarea id="offerCode" readonly placeholder="接続コードがここに表示されます..."></textarea>
       <button onclick="copyText('offerCode')">📋 コピー</button>
+      <button class="primary" onclick="shareText('offerCode')">📤 AirDropで共有</button>
     </div>
     <div class="card">
       <h2>③ iPad側で出た「応答コード」をここに貼り付け</h2>
       <textarea id="answerInput" placeholder="ここにiPadで表示されたコードを貼り付けてください"></textarea>
+      <button onclick="pasteText('answerInput')">📥 クリップボードから貼り付け</button>
       <button class="primary" onclick="applyAnswer()">🔗 接続する</button>
     </div>
   </div>
@@ -85,12 +87,14 @@
     <div class="card">
       <h2>① iPhone側で出た「接続コード」をここに貼り付け</h2>
       <textarea id="offerInput" placeholder="ここにiPhoneで表示されたコードを貼り付けてください"></textarea>
+      <button onclick="pasteText('offerInput')">📥 クリップボードから貼り付け</button>
       <button class="primary" onclick="createAnswer()">✅ 応答コードを作成</button>
     </div>
     <div class="card">
       <h2>② このコードをiPhoneに送ってください(コピー)</h2>
       <textarea id="answerCode" readonly placeholder="応答コードがここに表示されます..."></textarea>
       <button onclick="copyText('answerCode')">📋 コピー</button>
+      <button class="primary" onclick="shareText('answerCode')">📤 AirDropで共有</button>
     </div>
     <div class="card">
       <h2>③ 受信した映像</h2>
@@ -130,12 +134,39 @@ function decodeDescription(code) {
   return JSON.parse(decodeURIComponent(atob(code.trim())));
 }
 
+// クリップボードから直接読み込む(共有シートで受け取った後、
+// クリップボードにコピー済みであればワンタップで貼り付けられる)
+async function pasteText(id) {
+  try {
+    const text = await navigator.clipboard.readText();
+    document.getElementById(id).value = text;
+  } catch (err) {
+    alert("クリップボードから読み込めませんでした。手動で貼り付けてください。");
+  }
+}
+
 function copyText(id) {
   const el = document.getElementById(id);
   el.select();
   el.setSelectionRange(0, 999999);
   document.execCommand("copy");
   alert("コピーしました");
+}
+
+// AirDrop・メッセージ・メール等で直接送れる共有シートを開く
+// (長いコードを手作業でコピペするのは非現実的なため、こちらを推奨)
+async function shareText(id) {
+  const text = document.getElementById(id).value;
+  if (!text) { alert("まだコードが生成されていません"); return; }
+  if (navigator.share) {
+    try {
+      await navigator.share({ text });
+    } catch (err) {
+      // ユーザーがキャンセルした場合などは何もしない
+    }
+  } else {
+    alert("この端末は共有機能に対応していません。コピーボタンをお使いください。");
+  }
 }
 
 function showRole(role) {
