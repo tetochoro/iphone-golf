@@ -777,12 +777,14 @@ async function wrShareText(id) {
 function wrInit() {
   const statusEl = document.getElementById("wrStatus");
   wrPc = new RTCPeerConnection(wrPcConfig);
+  let wrReceivedStream = null;
+  let wrAppStarted = false;
 
   wrPc.ontrack = (event) => {
-    // 映像を受信できたら、セットアップ画面を閉じて解析アプリ本体を起動する
-    document.getElementById("webrtcSetup").style.display = "none";
-    document.getElementById("app").style.display = "";
-    startCamera(event.streams[0]);
+    // この時点ではまだ「映像を受け取る準備ができた」段階に過ぎず、
+    // 実際に接続(ICE/DTLS)が完了して映像データが届いているとは限らない。
+    // ここではストリームを保持するだけにし、画面はまだ切り替えない
+    wrReceivedStream = event.streams[0];
   };
 
   wrPc.onconnectionstatechange = () => {
@@ -790,6 +792,14 @@ function wrInit() {
     if (wrPc.connectionState === "connected") {
       statusEl.textContent = "✅ 接続済み・受信中";
       statusEl.style.color = "#00ff00";
+
+      // 本当に接続が完了したこのタイミングで、はじめて解析アプリ画面に切り替える
+      if (!wrAppStarted && wrReceivedStream) {
+        wrAppStarted = true;
+        document.getElementById("webrtcSetup").style.display = "none";
+        document.getElementById("app").style.display = "";
+        startCamera(wrReceivedStream);
+      }
     }
   };
 }
@@ -809,7 +819,8 @@ async function wrCreateAnswer() {
     await wrWaitForIceGatheringComplete(wrPc);
 
     document.getElementById("wrAnswerCode").value = wrEncodeDescription(wrPc.localDescription);
-    statusEl.textContent = "上のコードをコピーして、iPhoneに送ってください";
+    statusEl.textContent = "⚠️ 下の応答コードを、必ずiPhone側に送って「接続する」を押してもらってください(まだ接続は完了していません)";
+    statusEl.style.color = "#ffcc00";
   } catch (err) {
     statusEl.textContent = "エラー: " + err.message;
   }
