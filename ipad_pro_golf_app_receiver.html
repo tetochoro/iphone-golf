@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>ゴルフスイング解析(iPad受信版・iPhoneカメラ使用)</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #1e1e1e; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif;
+    overflow: hidden; user-select: none;
+  }
+  #app {
+    display: flex; flex-direction: column;
+    width: 100%; height: 100vh; height: -webkit-fill-available;
+  }
+  #videoWrap {
+    flex: 1 1 auto; position: relative; background: #000;
+    min-height: 0; overflow: hidden;
+  }
+  video, canvas#displayCanvas {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: contain; background: #000;
+  }
+  video { visibility: hidden; } /* videoは撮影ソースとしてのみ使い、表示はcanvasで行う */
+  #drawCanvas {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    touch-action: none;
+  }
+  #statusOverlay {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.55); padding: 8px 22px; border-radius: 14px;
+    font-size: 22px; font-weight: 700; white-space: nowrap; z-index: 5;
+    pointer-events: none;
+  }
+  #diagOverlay {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(0,0,0,0.45); padding: 3px 8px; border-radius: 8px;
+    font-size: 11px; color: #aaa; white-space: nowrap; z-index: 5;
+    pointer-events: none;
+  }
+  #controls {
+    flex: 0 0 auto; background: #1e1e1e; padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  }
+  .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
+  .row.split > div { flex: 1 1 0; min-width: 0; }
+  label.small { font-size: 12px; color: #00e5ff; display: block; margin-bottom: 2px; }
+  input[type=range] {
+    width: 100%; height: 28px; -webkit-appearance: none; background: transparent;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 8px; background: #555; border-radius: 4px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; border: 2px solid #000; margin-top: -9px;
+  }
+  button {
+    font-size: 12px; padding: 6px 8px; border: none; border-radius: 8px;
+    background: #424242; color: #fff; white-space: nowrap;
+  }
+  button:active { filter: brightness(1.3); }
+  button.rec { background: #2e7d32; font-weight: 700; }
+  button.danger { background: #d32f2f; }
+  button.live { background: #0288d1; }
+  .colorBtn {
+    width: 28px; height: 28px; border-radius: 50%; border: 2px solid #888; padding: 0;
+    flex: 0 0 auto;
+  }
+  .colorBtn.selected { border-color: #fff; }
+  #colorRow { flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<!-- WebRTC受信セットアップ画面(接続が完了するまではこちらを表示) -->
+<div id="webrtcSetup" style="padding:16px; font-family:-apple-system,'Hiragino Sans',sans-serif; color:#fff; background:#1e1e1e; min-height:100vh;">
+  <h1 style="font-size:18px; margin:0 0 12px;">📡 iPhoneからの映像を受信</h1>
+
+  <div style="background:#2a2a2a; border-radius:12px; padding:14px; margin-bottom:14px;">
+    <h2 style="font-size:14px; color:#00e5ff; margin:0 0 8px;">① iPhone側の「接続コード」を貼り付け</h2>
+    <textarea id="wrOfferInput" placeholder="ここにiPhoneで表示されたコードを貼り付けてください"
+      style="width:100%; height:90px; font-size:11px; font-family:monospace; background:#111; color:#0f0; border:1px solid #444; border-radius:8px; padding:8px;"></textarea>
+    <button onclick="wrPasteText('wrOfferInput')" style="font-size:15px; padding:10px 16px; border:none; border-radius:10px; background:#424242; color:#fff; margin:4px 4px 4px 0;">📥 クリップボードから貼り付け</button>
+    <button class="primary" onclick="wrCreateAnswer()" style="font-size:15px; padding:10px 16px; border:none; border-radius:10px; background:#2e7d32; color:#fff; font-weight:700; margin:4px 4px 4px 0;">✅ 応答コードを作成</button>
+  </div>
+
+  <div style="background:#2a2a2a; border-radius:12px; padding:14px; margin-bottom:14px;">
+    <h2 style="font-size:14px; color:#00e5ff; margin:0 0 8px;">② このコードをiPhoneに送る</h2>
+    <textarea id="wrAnswerCode" readonly placeholder="応答コードがここに表示されます..."
+      style="width:100%; height:90px; font-size:11px; font-family:monospace; background:#111; color:#0f0; border:1px solid #444; border-radius:8px; padding:8px;"></textarea>
+    <button onclick="wrCopyText('wrAnswerCode')" style="font-size:15px; padding:10px 16px; border:none; border-radius:10px; background:#424242; color:#fff; margin:4px 4px 4px 0;">📋 コピー</button>
+    <button class="primary" onclick="wrShareText('wrAnswerCode')" style="font-size:15px; padding:10px 16px; border:none; border-radius:10px; background:#2e7d32; color:#fff; font-weight:700; margin:4px 4px 4px 0;">📤 AirDropで共有</button>
+  </div>
+
+  <div id="wrStatus" style="font-size:13px; color:#ffcc00; margin:8px 0;">iPhone側の接続コードを待っています...</div>
+</div>
+
+<div id="app" style="display:none;">
+  <div id="videoWrap">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="displayCanvas"></canvas>
+    <canvas id="drawCanvas"></canvas>
+    <div id="statusOverlay">カメラ起動中...</div>
+    <div id="diagOverlay">取込:0 間引:0</div>
+  </div>
+
+  <div id="controls">
+    <div class="row split">
+      <div>
+        <label class="small" id="recLabel">録画時間: 10秒</label>
+        <input type="range" id="recSlider" min="0" max="30" step="1" value="10">
+      </div>
+      <div>
+        <label class="small">コマ送り(再生中)</label>
+        <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
+      </div>
+      <div>
+        <label class="small">🔊しきい値 (<span id="volumeLabel">0/20</span>)</label>
+        <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20">
+      </div>
+    </div>
+
+    <div class="row" id="colorRow">
+      <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
+      <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
+      <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
+      <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
+      <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
+      <button id="btnRec" class="rec">🔴10秒</button>
+      <button id="btnPlay">⏯</button>
+      <button id="btnPrev">◀</button>
+      <button id="btnNext">▶</button>
+      <button id="btnClear" class="danger">🧹</button>
+      <button id="btnLive" class="live">📹</button>
+
+      <label style="display:flex; align-items:center; gap:2px; font-size:11px; color:#00e5ff; white-space:nowrap;">
+        <input type="checkbox" id="chkSound" style="width:14px;height:14px;">
+        🔊自動録画
+      </label>
+      <select id="micSelect" style="font-size:10px; padding:2px; border-radius:5px; background:#333; color:#fff; border:1px solid #555; max-width:110px;">
+        <option value="">マイク選択</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ================= 設定 =================
+const MAX_RECORD_SECONDS = 30;
+const PLAYBACK_SPEED = 0.5;      // 0.5 = 1/2スロー再生
+const CAPTURE_FPS = 30;          // 目標値。captureBusyガードにより、端末が
+                                  // 追いつかない時だけ自動的に間引かれる仕組み
+const BUFFER_SECONDS = MAX_RECORD_SECONDS + 3;
+const JPEG_QUALITY = 0.85;
+
+// --- 音検知による自動録画(インパクト音トリガー) ---
+const PRE_SECONDS = 3.0;             // 音を検知した瞬間より「前」何秒を含めるか
+const POST_SECONDS = 3.0;            // 音を検知した瞬間より「後」何秒を含めるか
+const TRIGGER_COOLDOWN_SECONDS = 3.0; // 1回検知したら最低何秒は次の検知をしないか
+const SOUND_THRESHOLD_DEFAULT = 20;  // 初期のしきい値(0〜100、環境により調整)
+
+// ================= 状態変数 =================
+let state = "LIVE";              // LIVE / RECORDING / REVIEW
+let recordSeconds = 10;
+let recStartTime = 0;
+let reviewFrames = [];           // {img, ts} の配列
+let reviewIdx = 0;
+let isPlaying = false;
+let reviewIntervalMs = 1000 / (CAPTURE_FPS * PLAYBACK_SPEED);
+let playTimer = null;
+
+let buffer = [];                 // {ts, img(Image要素)} のローリングバッファ
+const bufferMax = Math.round(CAPTURE_FPS * BUFFER_SECONDS);
+
+let currentColor = "#ff3b30";
+let lines = [];                  // {x1,y1,x2,y2,color}
+let drawing = false;
+let lastX = 0, lastY = 0;
+
+// ---- 音検知関連 ----
+let soundEnabled = false;
+let soundThreshold = SOUND_THRESHOLD_DEFAULT;
+let currentVolume = 0;
+let soundTriggerTs = null;       // 検知した瞬間の時刻(後半録画待ち中はnull以外)
+let lastTriggerTime = 0;
+let audioCtx = null;
+let analyser = null;
+let micStream = null;
+let micSourceNode = null;
+let volumeDataArray = null;
+let selectedMicId = null;
+
+// ================= DOM =================
+const video = document.getElementById("video");
+const displayCanvas = document.getElementById("displayCanvas");
+const drawCanvas = document.getElementById("drawCanvas");
+const dctx = displayCanvas.getContext("2d");
+const lctx = drawCanvas.getContext("2d");
+const statusOverlay = document.getElementById("statusOverlay");
+const diagOverlay = document.getElementById("diagOverlay");
+const recSlider = document.getElementById("recSlider");
+const recLabel = document.getElementById("recLabel");
+const seekSlider = document.getElementById("seekSlider");
+const btnRec = document.getElementById("btnRec");
+const btnPlay = document.getElementById("btnPlay");
+const btnPrev = document.getElementById("btnPrev");
+const btnNext = document.getElementById("btnNext");
+const btnClear = document.getElementById("btnClear");
+const btnLive = document.getElementById("btnLive");
+const chkSound = document.getElementById("chkSound");
+const micSelect = document.getElementById("micSelect");
+const thresholdSlider = document.getElementById("thresholdSlider");
+const volumeLabel = document.getElementById("volumeLabel");
+
+// オフスクリーンキャプチャ用(実際の画素取得・JPEG圧縮に使う)
+const captureCanvas = document.createElement("canvas");
+const cctx = captureCanvas.getContext("2d");
+
+// バッファ(録画・コマ送り用)保存専用の縮小キャンバス。
+// ライブ表示は高解像度のcaptureCanvasをそのまま使うが、長時間(最大30秒)
+// バッファに溜め続けるとメモリを大量消費してSafariが落ちる原因になるため、
+// バッファに保存する分だけ縮小してから保存する
+const BUFFER_STORE_WIDTH = 960;
+const bufferCanvas = document.createElement("canvas");
+const bctx = bufferCanvas.getContext("2d");
+
+// ================= カメラ起動 =================
+async function startCamera(stream) {
+  try {
+    // 引数で渡されたストリーム(WebRTC経由でiPhoneから受信した映像)を使う。
+    // 以前のようにiPad自身のカメラ(getUserMedia)は使わない
+    video.srcObject = stream;
+    await video.play();
+    captureCanvas.width = video.videoWidth || 1280;
+    captureCanvas.height = video.videoHeight || 720;
+
+    // バッファ用キャンバスは、元の縦横比を保ったまま幅960pxに縮小したサイズにする
+    const aspect = captureCanvas.height / captureCanvas.width;
+    bufferCanvas.width = BUFFER_STORE_WIDTH;
+    bufferCanvas.height = Math.round(BUFFER_STORE_WIDTH * aspect);
+
+    setStatus("LIVE - 録画ボタンを押してください", "#00ff00");
+    requestAnimationFrame(captureLoop);
+  } catch (err) {
+    setStatus("映像の受信でエラーが発生しました: " + err.message, "#ff5555");
+  }
+}
+
+// ================= 音検知(マイク入力)関連 =================
+async function listMics() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter(d => d.kind === "audioinput");
+    micSelect.innerHTML = "";
+    mics.forEach((d, i) => {
+      const opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `マイク ${i + 1}`;
+      micSelect.appendChild(opt);
+    });
+    // 名前に "Bluetooth" 等を含むデバイスがあれば自動選択する
+    const btIdx = mics.findIndex(d => /bluetooth|freebuds|airpods|headset/i.test(d.label));
+    if (btIdx >= 0) {
+      micSelect.value = mics[btIdx].deviceId;
+      selectedMicId = mics[btIdx].deviceId;
+    } else if (mics.length > 0) {
+      selectedMicId = mics[0].deviceId;
+    }
+  } catch (e) {
+    console.warn("マイク一覧の取得に失敗:", e);
+  }
+}
+
+async function startMic() {
+  stopMic();
+  try {
+    const constraints = {
+      audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
+    };
+    micStream = await navigator.mediaDevices.getUserMedia(constraints);
+    // ラベル取得のため、権限が下りた後にもう一度デバイス一覧を更新する
+    await listMics();
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micSourceNode = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    volumeDataArray = new Uint8Array(analyser.frequencyBinCount);
+    micSourceNode.connect(analyser);
+    requestAnimationFrame(pollVolume);
+  } catch (e) {
+    setStatus("マイクを起動できませんでした: " + e.message, "#ff5555");
+    chkSound.checked = false;
+    soundEnabled = false;
+  }
+}
+
+function stopMic() {
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
+  }
+  analyser = null;
+}
+
+function pollVolume() {
+  if (analyser && volumeDataArray) {
+    analyser.getByteTimeDomainData(volumeDataArray);
+    let sumSquares = 0;
+    for (let i = 0; i < volumeDataArray.length; i++) {
+      const v = (volumeDataArray[i] - 128) / 128;
+      sumSquares += v * v;
+    }
+    const rms = Math.sqrt(sumSquares / volumeDataArray.length);
+    currentVolume = rms * 300; // 見やすいスケール(0〜100程度)に変換
+    volumeLabel.textContent = `${currentVolume.toFixed(0)}/${soundThreshold}`;
+
+    const now = Date.now() / 1000;
+    if (soundEnabled && soundTriggerTs === null
+        && currentVolume > soundThreshold
+        && (now - lastTriggerTime) > TRIGGER_COOLDOWN_SECONDS) {
+      lastTriggerTime = now;
+      soundTriggerTs = now;
+      // 検知した瞬間、再生中だったら止めてライブ表示に切り替える
+      stopPlayTimer();
+      isPlaying = false;
+    }
+  }
+  if (soundEnabled) requestAnimationFrame(pollVolume);
+}
+
+function finishSoundClip() {
+  const triggerTs = soundTriggerTs;
+  const windowStart = triggerTs - PRE_SECONDS;
+  const windowEnd = triggerTs + POST_SECONDS;
+  const windowFrames = buffer.filter(f => f.ts >= windowStart && f.ts <= windowEnd)
+    .sort((a, b) => a.ts - b.ts);
+
+  soundTriggerTs = null; // 次の検知を受け付けられるようにする
+
+  if (windowFrames.length === 0) {
+    state = "LIVE";
+    return;
+  }
+
+  reviewFrames = windowFrames.map(f => ({ blob: f.blob, ts: f.ts }));
+
+  if (reviewFrames.length >= 2) {
+    const elapsed = reviewFrames[reviewFrames.length - 1].ts - reviewFrames[0].ts;
+    const realIntervalMs = (elapsed / (reviewFrames.length - 1)) * 1000;
+    reviewIntervalMs = Math.max(1, realIntervalMs / PLAYBACK_SPEED);
+  } else {
+    reviewIntervalMs = 1000 / (CAPTURE_FPS * PLAYBACK_SPEED);
+  }
+
+  reviewIdx = 0;
+  isPlaying = true;
+  lines = [];
+  seekSlider.max = String(reviewFrames.length - 1);
+  seekSlider.value = "0";
+  state = "REVIEW";
+  startPlayTimer();
+}
+
+chkSound.addEventListener("change", () => {
+  soundEnabled = chkSound.checked;
+  if (soundEnabled) {
+    startMic();
+  } else {
+    stopMic();
+  }
+});
+
+micSelect.addEventListener("change", () => {
+  selectedMicId = micSelect.value;
+  if (soundEnabled) startMic();
+});
+
+thresholdSlider.addEventListener("input", () => {
+  soundThreshold = parseInt(thresholdSlider.value, 10);
+});
+
+// ================= 常時キャプチャ(ローリングバッファ) =================
+let lastCaptureTime = 0;
+let captureBusy = false; // 圧縮処理の滞留防止フラグ
+let droppedFrameCount = 0;   // 処理が追いつかず間引かれたコマの累計数(診断用)
+let capturedFrameCount = 0;  // 正常に取り込めたコマの累計数(診断用)
+
+function captureLoop(ts) {
+  const now = performance.now();
+  const minInterval = 1000 / CAPTURE_FPS;
+  if (now - lastCaptureTime >= minInterval && video.videoWidth > 0) {
+    lastCaptureTime = now;
+    cctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+
+    // ライブ表示(LIVE・RECORDING中、および音検知の後半録画待ち中)は、
+    // JPEG化された画像の読み込み待ちを挟まず、今まさに描画したキャプチャ用
+    // キャンバスから直接・同期的に表示する(読み込み待ちによる黒画面を防ぐ)
+    if (state === "LIVE" || state === "RECORDING" || soundTriggerTs !== null) {
+      drawSourceToDisplay(captureCanvas, captureCanvas.width, captureCanvas.height);
+    }
+
+    // ローリングバッファ(録画・コマ送り用)には、縮小したキャンバスを
+    // 経由してからJPEG化して保存する。
+    //
+    // 重要: JPEG圧縮された「Blob」のまま保持し、展開済みの画像
+    // (ImageBitmap)には変換しない。展開済みの画像は圧縮データの
+    // 十数倍〜数十倍のメモリを消費するため、これを溜め込み続けると
+    // すぐにSafariのメモリ上限を超えてクラッシュする。Blobのまま
+    // 持てば、長時間・高画質のバッファでも軽量に保持できる
+    // (実際に表示する瞬間だけ、必要な1コマだけを展開する)
+    if (!captureBusy) {
+      captureBusy = true;
+      bctx.drawImage(captureCanvas, 0, 0, bufferCanvas.width, bufferCanvas.height);
+      const realTs = Date.now() / 1000;
+      bufferCanvas.toBlob((blob) => {
+        if (!blob) { captureBusy = false; return; }
+        buffer.push({ ts: realTs, blob });
+        if (buffer.length > bufferMax) buffer.shift();
+        capturedFrameCount++;
+        captureBusy = false;
+      }, "image/jpeg", JPEG_QUALITY);
+    } else {
+      // 前のコマがまだ処理中だったため、今回は取り込みを諦めた(間引き)
+      droppedFrameCount++;
+    }
+  }
+  requestAnimationFrame(captureLoop);
+}
+
+function drawSourceToDisplay(source, srcW, srcH) {
+  const w = displayCanvas.clientWidth;
+  const h = displayCanvas.clientHeight;
+  if (displayCanvas.width !== w) displayCanvas.width = w;
+  if (displayCanvas.height !== h) displayCanvas.height = h;
+  dctx.fillStyle = "#000";
+  dctx.fillRect(0, 0, w, h);
+  if (srcW > 0 && srcH > 0) {
+    // 画面いっぱいに埋める(はみ出た部分は自動的に切れる。縦横比は保つので歪まない)
+    const scale = Math.max(w / srcW, h / srcH);
+    const dw = srcW * scale;
+    const dh = srcH * scale;
+    const dx = (w - dw) / 2;
+    const dy = (h - dh) / 2;
+    dctx.drawImage(source, dx, dy, dw, dh);
+  }
+  redrawLines();
+}
+
+function drawToDisplay(img) {
+  const w = displayCanvas.clientWidth;
+  const h = displayCanvas.clientHeight;
+  if (displayCanvas.width !== w) displayCanvas.width = w;
+  if (displayCanvas.height !== h) displayCanvas.height = h;
+  dctx.fillStyle = "#000";
+  dctx.fillRect(0, 0, w, h);
+  // ImageBitmapは生成された時点で常に描画可能(Image要素のような
+  // 読み込み待ち状態がない)ため、.complete等のチェックは不要
+  const srcW = img.width || img.naturalWidth || 0;
+  const srcH = img.height || img.naturalHeight || 0;
+  if (srcW > 0 && srcH > 0) {
+    // 画面いっぱいに埋める(はみ出た部分は自動的に切れる。縦横比は保つので歪まない)
+    const scale = Math.max(w / srcW, h / srcH);
+    const dw = srcW * scale;
+    const dh = srcH * scale;
+    const dx = (w - dw) / 2;
+    const dy = (h - dh) / 2;
+    dctx.drawImage(img, dx, dy, dw, dh);
+  }
+  redrawLines();
+}
+
+function redrawLines() {
+  const w = drawCanvas.clientWidth, h = drawCanvas.clientHeight;
+  if (drawCanvas.width !== w) drawCanvas.width = w;
+  if (drawCanvas.height !== h) drawCanvas.height = h;
+  lctx.clearRect(0, 0, w, h);
+  lctx.lineCap = "round"; lctx.lineJoin = "round"; lctx.lineWidth = 4;
+  for (const l of lines) {
+    lctx.strokeStyle = l.color;
+    lctx.beginPath();
+    lctx.moveTo(l.x1, l.y1);
+    lctx.lineTo(l.x2, l.y2);
+    lctx.stroke();
+  }
+}
+
+// ================= 録画 =================
+function startRecording() {
+  recStartTime = Date.now() / 1000;
+  state = "RECORDING";
+}
+
+function finishRecording() {
+  const now = Date.now() / 1000;
+  const cutoff = now - recordSeconds;
+  const windowFrames = buffer.filter(f => f.ts >= cutoff)
+    .sort((a, b) => a.ts - b.ts);
+
+  reviewFrames = windowFrames.map(f => ({ blob: f.blob, ts: f.ts }));
+
+  if (reviewFrames.length === 0) {
+    state = "LIVE";
+    return;
+  }
+
+  if (reviewFrames.length >= 2) {
+    const elapsed = reviewFrames[reviewFrames.length - 1].ts - reviewFrames[0].ts;
+    const realIntervalMs = (elapsed / (reviewFrames.length - 1)) * 1000;
+    reviewIntervalMs = Math.max(1, realIntervalMs / PLAYBACK_SPEED);
+  } else {
+    reviewIntervalMs = 1000 / (CAPTURE_FPS * PLAYBACK_SPEED);
+  }
+
+  reviewIdx = 0;
+  isPlaying = true;
+  lines = [];
+  seekSlider.max = String(reviewFrames.length - 1);
+  seekSlider.value = "0";
+  state = "REVIEW";
+  startPlayTimer();
+}
+
+let playbackBusy = false; // 再生時のデコード処理の滞留防止フラグ
+
+function startPlayTimer() {
+  stopPlayTimer();
+  playTimer = setInterval(() => {
+    if (!isPlaying) return;
+    if (playbackBusy) return; // 前のコマの展開がまだ終わっていなければこのtickは飛ばす
+    showReviewFrame(reviewIdx);
+    reviewIdx = (reviewIdx + 1) % reviewFrames.length;
+    seekSlider.value = String(reviewIdx);
+  }, reviewIntervalMs);
+}
+function stopPlayTimer() {
+  if (playTimer) clearInterval(playTimer);
+  playTimer = null;
+}
+
+// コマ送り・再生のたびに、そのコマだけをBlobから展開(デコード)して描画し、
+// 描画し終えたらすぐにclose()してメモリを解放する。
+// こうすることで、同時にメモリ上に存在する「展開済み画像」は常に最大1枚だけになり、
+// 録画時間や画質をどれだけ大きくしても、再生中のメモリ使用量は増えない
+async function showReviewFrame(idx) {
+  const entry = reviewFrames[idx];
+  if (!entry) return;
+  playbackBusy = true;
+  try {
+    const bitmap = await createImageBitmap(entry.blob);
+    drawToDisplay(bitmap);
+    bitmap.close();
+  } catch (e) {
+    console.warn("コマの展開に失敗:", e);
+  } finally {
+    playbackBusy = false;
+  }
+  setStatus(`コマ: ${idx + 1} / ${reviewFrames.length} (${isPlaying ? "1/2スロー再生中" : "一時停止中"})`, "#ffff00");
+}
+
+// ================= ボタン・操作 =================
+btnRec.addEventListener("click", () => {
+  stopPlayTimer();
+  startRecording();
+});
+
+btnPlay.addEventListener("click", () => {
+  if (state !== "REVIEW") return;
+  isPlaying = !isPlaying;
+  if (isPlaying) startPlayTimer(); else stopPlayTimer();
+});
+
+btnPrev.addEventListener("click", () => {
+  if (state !== "REVIEW" || reviewFrames.length === 0) return;
+  isPlaying = false; stopPlayTimer();
+  reviewIdx = (reviewIdx - 1 + reviewFrames.length) % reviewFrames.length;
+  seekSlider.value = String(reviewIdx);
+  showReviewFrame(reviewIdx);
+});
+
+btnNext.addEventListener("click", () => {
+  if (state !== "REVIEW" || reviewFrames.length === 0) return;
+  isPlaying = false; stopPlayTimer();
+  reviewIdx = (reviewIdx + 1) % reviewFrames.length;
+  seekSlider.value = String(reviewIdx);
+  showReviewFrame(reviewIdx);
+});
+
+btnClear.addEventListener("click", () => {
+  lines = [];
+  redrawLines();
+});
+
+btnLive.addEventListener("click", () => {
+  stopPlayTimer();
+  isPlaying = false;
+  lines = [];
+  state = "LIVE";
+  setStatus("LIVE - 録画ボタンを押してください", "#00ff00");
+});
+
+recSlider.addEventListener("input", () => {
+  recordSeconds = parseInt(recSlider.value, 10);
+  recLabel.textContent = `録画時間: ${recordSeconds}秒`;
+  btnRec.textContent = recordSeconds > 0 ? `🔴 ${recordSeconds}秒録画` : "🔴 録画(0秒)";
+});
+
+seekSlider.addEventListener("input", () => {
+  if (state !== "REVIEW") return;
+  isPlaying = false; stopPlayTimer();
+  reviewIdx = parseInt(seekSlider.value, 10);
+  showReviewFrame(reviewIdx);
+});
+
+document.querySelectorAll(".colorBtn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    currentColor = btn.dataset.color;
+    document.querySelectorAll(".colorBtn").forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+  });
+});
+
+// ================= 描画(指でなぞって線を引く) =================
+function getPos(e) {
+  const rect = drawCanvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+}
+function startDraw(e) {
+  if (state !== "REVIEW") return;
+  e.preventDefault();
+  drawing = true;
+  const p = getPos(e);
+  lastX = p.x; lastY = p.y;
+}
+function moveDraw(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  const p = getPos(e);
+  lines.push({ x1: lastX, y1: lastY, x2: p.x, y2: p.y, color: currentColor });
+  lastX = p.x; lastY = p.y;
+  redrawLines();
+}
+function endDraw() { drawing = false; }
+
+drawCanvas.addEventListener("touchstart", startDraw, { passive: false });
+drawCanvas.addEventListener("touchmove", moveDraw, { passive: false });
+drawCanvas.addEventListener("touchend", endDraw);
+drawCanvas.addEventListener("mousedown", startDraw);
+drawCanvas.addEventListener("mousemove", moveDraw);
+drawCanvas.addEventListener("mouseup", endDraw);
+
+// ================= ステータス表示 =================
+function setStatus(text, color) {
+  statusOverlay.textContent = text;
+  statusOverlay.style.color = color || "#00ff00";
+}
+
+// ================= 録画時間の監視ループ =================
+function recordWatchLoop() {
+  // コマ取り込み状況の診断表示(取込コマ数・間引かれたコマ数)
+  diagOverlay.textContent = `取込:${capturedFrameCount} 間引:${droppedFrameCount}`;
+
+  if (soundTriggerTs !== null) {
+    const elapsed = Date.now() / 1000 - soundTriggerTs;
+    const remaining = Math.max(0, POST_SECONDS - elapsed);
+    setStatus(`🔊検知! 収録中... 残り ${remaining.toFixed(1)} 秒`, "#ff9100");
+    if (elapsed >= POST_SECONDS) {
+      finishSoundClip();
+    }
+  } else if (state === "RECORDING") {
+    const elapsed = Date.now() / 1000 - recStartTime;
+    const remaining = Math.max(0, recordSeconds - elapsed);
+    setStatus(`🔴 録画中... 残り ${remaining.toFixed(1)} 秒`, "#ff3d00");
+    if (elapsed >= recordSeconds) {
+      finishRecording();
+    }
+  }
+  requestAnimationFrame(recordWatchLoop);
+}
+
+// ================= 起動 =================
+window.addEventListener("resize", () => {
+  if (state === "REVIEW" && reviewFrames[reviewIdx]) {
+    showReviewFrame(reviewIdx);
+  }
+});
+
+// ---------------------------------------------------
+// WebRTC受信(iPhoneからの映像を受け取る)
+// ---------------------------------------------------
+const wrPcConfig = { iceServers: [] }; // 同一ホットスポット内なので不要
+let wrPc = null;
+
+function wrWaitForIceGatheringComplete(peerConn) {
+  if (peerConn.iceGatheringState === "complete") return Promise.resolve();
+  return new Promise((resolve) => {
+    function check() {
+      if (peerConn.iceGatheringState === "complete") {
+        peerConn.removeEventListener("icegatheringstatechange", check);
+        resolve();
+      }
+    }
+    peerConn.addEventListener("icegatheringstatechange", check);
+  });
+}
+
+function wrEncodeDescription(desc) {
+  return btoa(encodeURIComponent(JSON.stringify(desc)));
+}
+function wrDecodeDescription(code) {
+  return JSON.parse(decodeURIComponent(atob(code.trim())));
+}
+
+function wrCopyText(id) {
+  const el = document.getElementById(id);
+  el.select();
+  el.setSelectionRange(0, 999999);
+  document.execCommand("copy");
+  alert("コピーしました");
+}
+
+async function wrPasteText(id) {
+  try {
+    const text = await navigator.clipboard.readText();
+    document.getElementById(id).value = text;
+  } catch (err) {
+    alert("クリップボードから読み込めませんでした。手動で貼り付けてください。");
+  }
+}
+
+async function wrShareText(id) {
+  const text = document.getElementById(id).value;
+  if (!text) { alert("まだコードが生成されていません"); return; }
+  if (navigator.share) {
+    try { await navigator.share({ text }); } catch (err) { /* キャンセル時は何もしない */ }
+  } else {
+    alert("この端末は共有機能に対応していません。コピーボタンをお使いください。");
+  }
+}
+
+function wrInit() {
+  const statusEl = document.getElementById("wrStatus");
+  wrPc = new RTCPeerConnection(wrPcConfig);
+
+  wrPc.ontrack = (event) => {
+    // 映像を受信できたら、セットアップ画面を閉じて解析アプリ本体を起動する
+    document.getElementById("webrtcSetup").style.display = "none";
+    document.getElementById("app").style.display = "";
+    startCamera(event.streams[0]);
+  };
+
+  wrPc.onconnectionstatechange = () => {
+    statusEl.textContent = `接続状態: ${wrPc.connectionState}`;
+    if (wrPc.connectionState === "connected") {
+      statusEl.textContent = "✅ 接続済み・受信中";
+      statusEl.style.color = "#00ff00";
+    }
+  };
+}
+
+async function wrCreateAnswer() {
+  const statusEl = document.getElementById("wrStatus");
+  const code = document.getElementById("wrOfferInput").value;
+  if (!code.trim()) { alert("iPhone側のコードを貼り付けてください"); return; }
+
+  try {
+    const offer = wrDecodeDescription(code);
+    await wrPc.setRemoteDescription(offer);
+
+    const answer = await wrPc.createAnswer();
+    await wrPc.setLocalDescription(answer);
+    statusEl.textContent = "応答コードを生成中...";
+    await wrWaitForIceGatheringComplete(wrPc);
+
+    document.getElementById("wrAnswerCode").value = wrEncodeDescription(wrPc.localDescription);
+    statusEl.textContent = "上のコードをコピーして、iPhoneに送ってください";
+  } catch (err) {
+    statusEl.textContent = "エラー: " + err.message;
+  }
+}
+
+wrInit();
+recordWatchLoop();
+</script>
+</body>
+</html>
