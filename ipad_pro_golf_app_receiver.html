@@ -237,7 +237,31 @@ async function startCamera(stream) {
     // 引数で渡されたストリーム(WebRTC経由でiPhoneから受信した映像)を使う。
     // 以前のようにiPad自身のカメラ(getUserMedia)は使わない
     video.srcObject = stream;
-    await video.play();
+
+    // 映像のサイズ情報(メタデータ)が取得できるまで確実に待つ。
+    // ここを待たずにcaptureCanvasのサイズを決めてしまうと、
+    // videoWidth/videoHeightがまだ0のままになり、真っ黒のまま
+    // 進まなくなることがある。万一メタデータ取得自体が来ない場合の
+    // 保険として、3秒でタイムアウトして先に進むようにする
+    await Promise.race([
+      new Promise((resolve) => {
+        if (video.readyState >= 1 && video.videoWidth > 0) {
+          resolve();
+        } else {
+          video.onloadedmetadata = () => resolve();
+        }
+      }),
+      new Promise((resolve) => setTimeout(resolve, 3000))
+    ]);
+
+    // play()が(自動再生ポリシー等で)失敗しても、処理全体を止めずに
+    // 先に進む(videoタグのautoplay属性側で再生が始まっていることも多いため)
+    try {
+      await video.play();
+    } catch (playErr) {
+      console.warn("video.play()に失敗しましたが、処理を続行します:", playErr);
+    }
+
     captureCanvas.width = video.videoWidth || 1280;
     captureCanvas.height = video.videoHeight || 720;
 
