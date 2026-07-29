@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>合言葉方式 接続テスト(PeerJS)</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #1e1e1e; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif;
+  }
+  #app { padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .card {
+    background: #2a2a2a; border-radius: 12px; padding: 14px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 14px; color: #00e5ff; margin: 0 0 8px; }
+  button {
+    font-size: 15px; padding: 10px 16px; border: none; border-radius: 10px;
+    background: #424242; color: #fff; margin: 4px 4px 4px 0; cursor: pointer;
+  }
+  button.primary { background: #2e7d32; font-weight: 700; }
+  button:active { filter: brightness(1.3); }
+  input[type=text] {
+    font-size: 20px; padding: 12px; border-radius: 10px; border: 1px solid #555;
+    background: #111; color: #0f0; width: 100%; text-align: center;
+    letter-spacing: 2px; font-family: monospace;
+  }
+  video { width: 100%; max-height: 50vh; background: #000; border-radius: 10px; }
+  #status, #statusR { font-size: 13px; color: #ffcc00; margin: 8px 0; word-break: break-all; }
+  .hidden { display: none; }
+  .roleBtn { width: 100%; padding: 22px; font-size: 18px; margin: 8px 0; border-radius: 14px; }
+  #myIdDisplay {
+    font-size: 32px; font-weight: 700; text-align: center; color: #0f0;
+    background: #111; border-radius: 10px; padding: 16px; letter-spacing: 3px;
+    font-family: monospace; word-break: break-all;
+  }
+</style>
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <h1>🔑 合言葉方式 接続テスト (安定化版)</h1>
+
+  <div id="roleSelect">
+    <div class="card">
+      <p>この端末の役割を選んでください。<br>
+      (※ 最初の接続時のみ、両方の端末でインターネット接続が必要です)</p>
+      <button class="roleBtn primary" onclick="startSender()">📱 送信側として使う(iPhone)</button>
+      <button class="roleBtn" style="background:#0288d1;" onclick="startReceiver()">📺 受信側として使う(iPad)</button>
+    </div>
+  </div>
+
+  <!-- 送信側(iPhone)UI -->
+  <div id="senderUI" class="hidden">
+    <div id="status">準備中...</div>
+    <div class="card">
+      <h2>① あなたの映像(送信準備中)</h2>
+      <video id="localVideo" autoplay playsinline muted></video>
+    </div>
+    <div class="card">
+      <h2>② iPad側に表示された「合言葉」を入力</h2>
+      <input type="text" id="targetIdInput" placeholder="例: a1b2c" autocapitalize="off" autocorrect="off">
+      <button class="primary" onclick="connectToReceiver()" style="width:100%; margin-top:8px;">🔗 接続する</button>
+    </div>
+  </div>
+
+  <!-- 受信側(iPad)UI -->
+  <div id="receiverUI" class="hidden">
+    <div id="statusR">準備中...</div>
+    <div class="card">
+      <h2>① この「合言葉」をiPhone側に伝えてください</h2>
+      <div id="myIdDisplay">生成中...</div>
+      <button onclick="copyMyId()" style="width:100%; margin-top:8px;">📋 コピー</button>
+      <button onclick="reconnectServer()" style="width:100%; margin-top:8px; background:#e65100;">🔄 サーバー再接続</button>
+    </div>
+    <div class="card">
+      <h2>② 受信した映像</h2>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+let peer = null;
+let myId = "";
+let localStreamGlobal = null;
+let keepAliveTimer = null;
+
+// 短く覚えやすいランダムIDを生成 (例: 5桁の英小数字)
+function generateShortId() {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 5; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+function showRole(role) {
+  document.getElementById("roleSelect").classList.add("hidden");
+  document.getElementById("senderUI").classList.toggle("hidden", role !== "sender");
+  document.getElementById("receiverUI").classList.toggle("hidden", role !== "receiver");
+}
+
+function copyMyId() {
+  navigator.clipboard.writeText(myId).then(() => alert("コピーしました: " + myId))
+    .catch(() => alert("コピーできませんでした。手動で控えてください: " + myId));
+}
+
+// サーバー接続維持用のハートビート処理
+function startKeepAlive() {
+  if (keepAliveTimer) clearInterval(keepAliveTimer);
+  keepAliveTimer = setInterval(() => {
+    if (peer && !peer.destroyed && peer.disconnected) {
+      console.log("サーバーから切断されているため、再接続を試みます...");
+      peer.reconnect();
+    }
+  }, 5000);
+}
+
+// 手動再接続ボタン用
+function reconnectServer() {
+  if (peer) {
+    if (peer.disconnected) {
+      peer.reconnect();
+    } else {
+      alert("サーバーとはすでに接続されています");
+    }
+  }
+}
+
+// ---------------------------------------------------
+// 送信側(iPhone)
+// ---------------------------------------------------
+async function startSender() {
+  showRole("sender");
+  const statusEl = document.getElementById("status");
+  statusEl.textContent = "カメラを起動しています...";
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    localStreamGlobal = stream;
+    document.getElementById("localVideo").srcObject = stream;
+
+    statusEl.textContent = "接続サーバーに接続しています...";
+    
+    // ランダムなIDで作成
+    const senderId = "cam-" + generateShortId();
+    peer = new Peer(senderId, { debug: 1 });
+
+    peer.on("open", (id) => {
+      statusEl.textContent = "準備完了。iPad側の合言葉を入力して「接続する」を押してください";
+      statusEl.style.color = "#ffcc00";
+      startKeepAlive();
+    });
+
+    peer.on("disconnected", () => {
+      statusEl.textContent = "⚠️ サーバーとの通信が一時切断されました。再接続を試みています...";
+      statusEl.style.color = "#ff9800";
+      peer.reconnect();
+    });
+
+    peer.on("error", (err) => {
+      console.error("PeerJSエラー:", err);
+      if (err.type === 'network' || err.type === 'lost-connection') {
+        statusEl.textContent = "⚠️ ネットワーク接続エラー: サーバーとの通信が切れました。自動再接続中...";
+        peer.reconnect();
+      } else {
+        statusEl.textContent = "エラー: " + err.type + " (" + (err.message || "") + ")";
+      }
+      statusEl.style.color = "#ff3333";
+    });
+  } catch (err) {
+    statusEl.textContent = "カメラを起動できませんでした: " + err.message;
+    statusEl.style.color = "#ff3333";
+  }
+}
+
+function connectToReceiver() {
+  const statusEl = document.getElementById("status");
+  const targetId = document.getElementById("targetIdInput").value.trim().toLowerCase();
+  if (!targetId) { alert("合言葉を入力してください"); return; }
+  if (!peer || !localStreamGlobal) { alert("カメラの準備がまだできていません"); return; }
+
+  statusEl.textContent = "iPadへ発信中...";
+  statusEl.style.color = "#ffcc00";
+
+  if (peer.disconnected) {
+    peer.reconnect();
+  }
+
+  const call = peer.call(targetId, localStreamGlobal);
+
+  call.on("stream", () => {});
+  
+  call.on("close", () => {
+    statusEl.textContent = "接続が切れました";
+    statusEl.style.color = "#ff9800";
+  });
+  
+  call.on("error", (err) => {
+    statusEl.textContent = "通話エラー: " + err.message;
+    statusEl.style.color = "#ff3333";
+  });
+
+  setTimeout(() => {
+    statusEl.textContent = "✅ 送信処理を完了しました (iPad側で映像を確認してください)";
+    statusEl.style.color = "#00ff00";
+  }, 1500);
+}
+
+// ---------------------------------------------------
+// 受信側(iPad)
+// ---------------------------------------------------
+function startReceiver() {
+  showRole("receiver");
+  const statusEl = document.getElementById("statusR");
+  statusEl.textContent = "接続サーバーに接続しています...";
+
+  // 覚えやすい5桁の合言葉を発行
+  myId = generateShortId();
+  document.getElementById("myIdDisplay").textContent = myId;
+
+  peer = new Peer(myId, { debug: 1 });
+
+  peer.on("open", (id) => {
+    myId = id;
+    document.getElementById("myIdDisplay").textContent = myId;
+    statusEl.textContent = "🟢 サーバー準備完了。この合言葉をiPhoneに入力してください";
+    statusEl.style.color = "#00ff00";
+    startKeepAlive();
+  });
+
+  peer.on("disconnected", () => {
+    statusEl.textContent = "⚠️ サーバーから切断されました。自動再接続を試みています...";
+    statusEl.style.color = "#ff9800";
+    peer.reconnect();
+  });
+
+  peer.on("call", (call) => {
+    statusEl.textContent = "📞 映像を受信中...";
+    statusEl.style.color = "#00e5ff";
+
+    call.answer(); // 映像を応答
+
+    call.on("stream", (remoteStream) => {
+      const videoEl = document.getElementById("remoteVideo");
+      videoEl.srcObject = remoteStream;
+      videoEl.play().catch(e => console.log("Auto-play blocked:", e));
+      
+      statusEl.textContent = "✅ 接続完了！映像を受信しています";
+      statusEl.style.color = "#00ff00";
+    });
+
+    call.on("close", () => {
+      statusEl.textContent = "接続が切断されました";
+      statusEl.style.color = "#ff9800";
+    });
+
+    call.on("error", (err) => {
+      statusEl.textContent = "受信エラー: " + err.message;
+      statusEl.style.color = "#ff3333";
+    });
+  });
+
+  peer.on("error", (err) => {
+    console.error("PeerJSエラー:", err);
+    if (err.type === 'unavailable-id') {
+      // IDが被った場合は別のIDを再作成
+      myId = generateShortId();
+      document.getElementById("myIdDisplay").textContent = myId;
+      peer = new Peer(myId);
+    } else if (err.type === 'network' || err.type === 'lost-connection') {
+      statusEl.textContent = "⚠️ サーバー通信切断。自動再接続中...";
+      statusEl.style.color = "#ff9800";
+      peer.reconnect();
+    } else {
+      statusEl.textContent = "エラー: " + err.type + " (" + (err.message || "") + ")";
+      statusEl.style.color = "#ff3333";
+    }
+  });
+}
+</script>
+</body>
+</html>
