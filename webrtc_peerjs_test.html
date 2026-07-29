@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>合言葉方式 接続テスト(PeerJS)</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #1e1e1e; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif;
+  }
+  #app { padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .card {
+    background: #2a2a2a; border-radius: 12px; padding: 14px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 14px; color: #00e5ff; margin: 0 0 8px; }
+  button {
+    font-size: 15px; padding: 10px 16px; border: none; border-radius: 10px;
+    background: #424242; color: #fff; margin: 4px 4px 4px 0;
+  }
+  button.primary { background: #2e7d32; font-weight: 700; }
+  button:active { filter: brightness(1.3); }
+  input[type=text] {
+    font-size: 20px; padding: 12px; border-radius: 10px; border: 1px solid #555;
+    background: #111; color: #0f0; width: 100%; text-align: center;
+    letter-spacing: 2px; font-family: monospace;
+  }
+  video { width: 100%; max-height: 50vh; background: #000; border-radius: 10px; }
+  #status, #statusR { font-size: 13px; color: #ffcc00; margin: 8px 0; }
+  .hidden { display: none; }
+  .roleBtn { width: 100%; padding: 22px; font-size: 18px; margin: 8px 0; border-radius: 14px; }
+  #myIdDisplay {
+    font-size: 32px; font-weight: 700; text-align: center; color: #0f0;
+    background: #111; border-radius: 10px; padding: 16px; letter-spacing: 3px;
+    font-family: monospace; word-break: break-all;
+  }
+</style>
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <h1>🔑 合言葉方式 接続テスト</h1>
+
+  <div id="roleSelect">
+    <div class="card">
+      <p>この端末の役割を選んでください。<br>
+      (この方式は、最初の接続時だけ<b>インターネット接続</b>が必要です。
+      LTE電波が入っていれば動作します)</p>
+      <button class="roleBtn primary" onclick="startSender()">📱 送信側として使う(iPhone)</button>
+      <button class="roleBtn" style="background:#0288d1;" onclick="startReceiver()">📺 受信側として使う(iPad)</button>
+    </div>
+  </div>
+
+  <!-- 送信側(iPhone)UI -->
+  <div id="senderUI" class="hidden">
+    <div id="status">準備中...</div>
+    <div class="card">
+      <h2>① あなたの映像(送信準備中)</h2>
+      <video id="localVideo" autoplay playsinline muted></video>
+    </div>
+    <div class="card">
+      <h2>② iPad側に表示された「合言葉」を入力</h2>
+      <input type="text" id="targetIdInput" placeholder="例: ab12cd34" autocapitalize="off" autocorrect="off">
+      <button class="primary" onclick="connectToReceiver()" style="width:100%; margin-top:8px;">🔗 接続する</button>
+    </div>
+  </div>
+
+  <!-- 受信側(iPad)UI -->
+  <div id="receiverUI" class="hidden">
+    <div id="statusR">準備中...</div>
+    <div class="card">
+      <h2>① この「合言葉」をiPhone側に伝えてください</h2>
+      <div id="myIdDisplay">生成中...</div>
+      <button onclick="copyMyId()" style="width:100%; margin-top:8px;">📋 コピー</button>
+    </div>
+    <div class="card">
+      <h2>② 受信した映像</h2>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+let peer = null;
+let myId = "";
+
+function showRole(role) {
+  document.getElementById("roleSelect").classList.add("hidden");
+  document.getElementById("senderUI").classList.toggle("hidden", role !== "sender");
+  document.getElementById("receiverUI").classList.toggle("hidden", role !== "receiver");
+}
+
+function copyMyId() {
+  navigator.clipboard.writeText(myId).then(() => alert("コピーしました: " + myId))
+    .catch(() => alert("コピーできませんでした。手動で控えてください: " + myId));
+}
+
+// ---------------------------------------------------
+// 送信側(iPhone)
+// ---------------------------------------------------
+let localStreamGlobal = null;
+
+async function startSender() {
+  showRole("sender");
+  const statusEl = document.getElementById("status");
+  statusEl.textContent = "カメラを起動しています...";
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    localStreamGlobal = stream;
+    document.getElementById("localVideo").srcObject = stream;
+
+    statusEl.textContent = "接続サーバーに接続しています...";
+    peer = new Peer();
+
+    peer.on("open", (id) => {
+      statusEl.textContent = "準備完了。iPad側の合言葉を入力して「接続する」を押してください";
+    });
+
+    peer.on("error", (err) => {
+      statusEl.textContent = "エラー: " + err.type + " " + (err.message || "");
+      console.error("PeerJSエラー:", err);
+    });
+  } catch (err) {
+    statusEl.textContent = "カメラを起動できませんでした: " + err.message;
+  }
+}
+
+function connectToReceiver() {
+  const statusEl = document.getElementById("status");
+  const targetId = document.getElementById("targetIdInput").value.trim();
+  if (!targetId) { alert("合言葉を入力してください"); return; }
+  if (!peer || !localStreamGlobal) { alert("カメラの準備がまだできていません"); return; }
+
+  statusEl.textContent = "接続中...";
+  const call = peer.call(targetId, localStreamGlobal);
+
+  call.on("stream", () => {
+    // 今回は映像を送るだけなので、相手からの映像は使わない
+  });
+  call.on("close", () => {
+    statusEl.textContent = "接続が切れました";
+  });
+  call.on("error", (err) => {
+    statusEl.textContent = "通話エラー: " + err.message;
+  });
+
+  // PeerJSには「接続完了」を直接示すイベントが無いため、
+  // 少し待って「送信中」に切り替える(実際に映像が届いているかはiPad側で確認)
+  setTimeout(() => {
+    statusEl.textContent = "✅ 送信中(iPad側で映像が映っているか確認してください)";
+    statusEl.style.color = "#00ff00";
+  }, 1500);
+}
+
+// ---------------------------------------------------
+// 受信側(iPad)
+// ---------------------------------------------------
+function startReceiver() {
+  showRole("receiver");
+  const statusEl = document.getElementById("statusR");
+  statusEl.textContent = "接続サーバーに接続しています...";
+
+  peer = new Peer();
+
+  peer.on("open", (id) => {
+    myId = id;
+    document.getElementById("myIdDisplay").textContent = id;
+    statusEl.textContent = "この合言葉をiPhone側に伝えてください";
+  });
+
+  peer.on("call", (call) => {
+    statusEl.textContent = "着信しました。応答しています...";
+    call.answer(); // 映像は送り返さない(受け取るだけ)
+    call.on("stream", (remoteStream) => {
+      document.getElementById("remoteVideo").srcObject = remoteStream;
+      statusEl.textContent = "✅ 接続済み・受信中";
+      statusEl.style.color = "#00ff00";
+    });
+  });
+
+  peer.on("error", (err) => {
+    statusEl.textContent = "エラー: " + err.type + " " + (err.message || "");
+    console.error("PeerJSエラー:", err);
+  });
+}
+</script>
+</body>
+</html>
