@@ -4,16 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>2台連携 ゴルフスイング解析システム (修正版)</title>
+<title>2台連携 ゴルフスイング解析システム (レイアウト完全固定版)</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  
+  /* 画面全体の高さをiOS/iPadOSに完全追従させる構造 */
   html, body {
-    margin: 0; padding: 0; width: 100%; height: 100%;
+    margin: 0; padding: 0;
+    width: 100vw; height: 100dvh; /* dvhで画面表示領域内にピッタリ収めます */
     background: #1e1e1e; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif;
     overflow: hidden; user-select: none;
   }
-  #app { display: flex; flex-direction: column; width: 100%; height: 100vh; }
+  
+  #app {
+    display: flex; flex-direction: column;
+    width: 100%; height: 100%; position: relative;
+  }
   
   /* 役割選択画面 */
   #roleSelect {
@@ -33,8 +40,17 @@
   }
 
   /* iPad（受信・解析側）画面 */
-  #receiverContainer { display: flex; flex-direction: column; width: 100%; height: 100%; position: relative; }
-  #videoWrap { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; min-height: 0; }
+  #receiverContainer {
+    display: flex; flex-direction: column;
+    width: 100%; height: 100%;
+  }
+
+  /* 映像表示領域：余った高さをすべて使い、溢れさせない */
+  #videoWrap {
+    flex: 1 1 0%;
+    min-height: 0;
+    position: relative; background: #000; overflow: hidden;
+  }
   video#remoteVideo { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   canvas#displayCanvas, canvas#drawCanvas {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;
@@ -44,50 +60,57 @@
   #statusOverlay {
     position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
     background: rgba(0,0,0,0.65); padding: 6px 18px; border-radius: 12px;
-    font-size: 16px; font-weight: 700; z-index: 5; pointer-events: none; white-space: nowrap;
+    font-size: 15px; font-weight: 700; z-index: 5; pointer-events: none; white-space: nowrap;
   }
   #pairCodeOverlay {
     position: absolute; top: 10px; left: 10px;
     background: rgba(0,0,0,0.7); padding: 6px 10px; border-radius: 8px; font-size: 12px; z-index: 5;
   }
-  #myIdDisplay { font-size: 16px; font-weight: bold; color: #0f0; font-family: monospace; }
+  #myIdDisplay { font-size: 14px; font-weight: bold; color: #0f0; font-family: monospace; }
 
-  /* 下部操作パネル */
+  /* 下部操作パネル：高さ固定で画面最下部に確実に留める */
   #controls {
-    flex: 0 0 auto; background: #1a1a1a; padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #333; z-index: 10;
+    flex: 0 0 auto;
+    background: #181818;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 8px;
+    border-top: 1px solid #333;
   }
-  .row { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
-  .row.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
-  
-  .control-group { display: flex; flex-direction: column; gap: 2px; }
+
+  .row-sliders {
+    display: flex; gap: 12px; width: 100%;
+  }
+  .control-group { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   label.small { font-size: 11px; color: #00e5ff; white-space: nowrap; }
   
-  input[type=range] { width: 100%; height: 22px; -webkit-appearance: none; background: transparent; }
-  input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #444; border-radius: 3px; }
+  input[type=range] { width: 100%; height: 20px; -webkit-appearance: none; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #333; border-radius: 3px; }
   input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
     background: #fff; border: 2px solid #000; margin-top: -7px;
   }
   
-  .btn-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; justify-content: space-between; }
-  .btn-subgroup { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .row-buttons {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; gap: 6px; flex-wrap: nowrap; overflow-x: auto;
+  }
+  .btn-subgroup { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
   button.actionBtn {
-    font-size: 13px; padding: 7px 12px; border: none; border-radius: 8px; background: #3a3a3c; color: #fff;
-    display: inline-flex; align-items: center; justify-content: center; min-width: 36px; cursor: pointer;
+    font-size: 12px; padding: 6px 10px; border: none; border-radius: 6px; background: #3a3a3c; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; height: 32px; cursor: pointer; white-space: nowrap;
   }
   button.actionBtn:active { filter: brightness(1.3); }
   button.rec { background: #2e7d32; font-weight: bold; }
   button.danger { background: #c62828; }
   button.live { background: #0288d1; }
   
-  .colorBtn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #666; padding: 0; cursor: pointer; flex-shrink: 0; }
-  .colorBtn.selected { border-color: #fff; transform: scale(1.1); }
+  .colorBtn { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #666; padding: 0; cursor: pointer; flex-shrink: 0; }
+  .colorBtn.selected { border-color: #fff; transform: scale(1.15); }
   
   .sound-toggle {
-    display: flex; align-items: center; gap: 4px; font-size: 12px; color: #00e5ff; font-weight: bold;
-    background: #282828; padding: 4px 8px; border-radius: 6px; border: 1px solid #444; cursor: pointer;
+    display: flex; align-items: center; gap: 4px; font-size: 11px; color: #00e5ff; font-weight: bold;
+    background: #252525; padding: 4px 8px; border-radius: 6px; border: 1px solid #444; height: 32px; cursor: pointer; white-space: nowrap;
   }
   .hidden { display: none !important; }
 </style>
@@ -119,6 +142,7 @@
 
   <!-- 3. iPad (受信・スイング解析) UI -->
   <div id="receiverContainer" class="hidden">
+    <!-- 上部: 映像表示部（画面に合わせて可変縮小） -->
     <div id="videoWrap">
       <video id="remoteVideo" autoplay playsinline muted></video>
       <canvas id="displayCanvas"></canvas>
@@ -130,10 +154,10 @@
       </div>
     </div>
 
-    <!-- 操作パネル -->
+    <!-- 下部: 操作パネル（必ず画面内に収まる構造） -->
     <div id="controls">
-      <!-- 1行目: 各種スライダー -->
-      <div class="row sliders">
+      <!-- スライダー行 -->
+      <div class="row-sliders">
         <div class="control-group">
           <label class="small" id="recLabel">録画時間: 10秒</label>
           <input type="range" id="recSlider" min="1" max="30" step="1" value="10">
@@ -148,8 +172,8 @@
         </div>
       </div>
 
-      <!-- 2行目: ボタン群 & カラーピッカー -->
-      <div class="btn-group">
+      <!-- ボタン行 -->
+      <div class="row-buttons">
         <div class="btn-subgroup">
           <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
           <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
@@ -169,7 +193,7 @@
 
         <div class="btn-subgroup">
           <label class="sound-toggle">
-            <input type="checkbox" id="chkSound" style="width:16px; height:16px;"> 🔊自動録画
+            <input type="checkbox" id="chkSound" style="width:15px; height:15px;"> 🔊自動録画
           </label>
         </div>
       </div>
@@ -422,7 +446,7 @@ function finishClip(windowFrames) {
   startPlayTimer();
 }
 
-// ----------------- 音検知機能 (エラーハンドリング強化) -----------------
+// ----------------- 音検知機能 -----------------
 async function startMic() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
