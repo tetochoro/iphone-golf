@@ -74,6 +74,10 @@
   .colorBtn.selected { border-color: #fff; }
   #colorRow { flex-wrap: wrap; }
 </style>
+<!-- QRコード生成・読み取り用ライブラリ(ページを開く時に1回だけ通信が必要。
+     一度読み込めば、その後の接続作業自体はホットスポット内だけで完結する) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
 <body>
 
@@ -82,22 +86,33 @@
   <h1 style="font-size:18px; margin:0 0 12px;">📡 iPhoneからの映像を受信</h1>
 
   <div style="background:#2a2a2a; border-radius:12px; padding:14px; margin-bottom:14px;">
-    <h2 style="font-size:14px; color:#00e5ff; margin:0 0 8px;">① iPhone側の「接続コード」を貼り付け</h2>
-    <textarea id="wrOfferInput" placeholder="ここにiPhoneで表示されたコードを貼り付けてください"
-      style="width:100%; height:90px; font-size:11px; font-family:monospace; background:#111; color:#0f0; border:1px solid #444; border-radius:8px; padding:8px;"></textarea>
-    <button onclick="wrPasteText('wrOfferInput')" style="font-size:15px; padding:10px 16px; border:none; border-radius:10px; background:#424242; color:#fff; margin:4px 4px 4px 0;">📥 クリップボードから貼り付け</button>
+    <h2 style="font-size:14px; color:#00e5ff; margin:0 0 8px;">① iPhone側の「接続コード」を読み取る</h2>
+    <button class="primary" onclick="wrStartScan('wrOfferInput')" style="font-size:15px; padding:10px 16px; border:none; border-radius:10px; background:#2e7d32; color:#fff; font-weight:700; margin:4px 4px 4px 0;">📷 QRコードを読み取る</button>
+    <textarea id="wrOfferInput" placeholder="QRコードを読み取るか、ここに直接貼り付けてください"
+      style="width:100%; height:70px; font-size:11px; font-family:monospace; background:#111; color:#0f0; border:1px solid #444; border-radius:8px; padding:8px; margin-top:6px;"></textarea>
+    <button onclick="wrPasteText('wrOfferInput')" style="font-size:13px; padding:8px 12px; border:none; border-radius:8px; background:#424242; color:#fff; margin:4px 4px 4px 0;">📥 クリップボードから貼り付け</button>
     <button class="primary" onclick="wrCreateAnswer()" style="font-size:15px; padding:10px 16px; border:none; border-radius:10px; background:#2e7d32; color:#fff; font-weight:700; margin:4px 4px 4px 0;">✅ 応答コードを作成</button>
   </div>
 
   <div style="background:#2a2a2a; border-radius:12px; padding:14px; margin-bottom:14px;">
-    <h2 style="font-size:14px; color:#00e5ff; margin:0 0 8px;">② このコードをiPhoneに送る</h2>
+    <h2 style="font-size:14px; color:#00e5ff; margin:0 0 8px;">② このQRコードをiPhoneに読み取ってもらう</h2>
+    <div id="wrAnswerQr" style="background:#fff; padding:10px; border-radius:8px; display:inline-block; min-height:40px;"></div>
     <textarea id="wrAnswerCode" readonly placeholder="応答コードがここに表示されます..."
-      style="width:100%; height:90px; font-size:11px; font-family:monospace; background:#111; color:#0f0; border:1px solid #444; border-radius:8px; padding:8px;"></textarea>
-    <button onclick="wrCopyText('wrAnswerCode')" style="font-size:15px; padding:10px 16px; border:none; border-radius:10px; background:#424242; color:#fff; margin:4px 4px 4px 0;">📋 コピー</button>
-    <button class="primary" onclick="wrShareText('wrAnswerCode')" style="font-size:15px; padding:10px 16px; border:none; border-radius:10px; background:#2e7d32; color:#fff; font-weight:700; margin:4px 4px 4px 0;">📤 AirDropで共有</button>
+      style="width:100%; height:70px; font-size:11px; font-family:monospace; background:#111; color:#0f0; border:1px solid #444; border-radius:8px; padding:8px; margin-top:6px;"></textarea>
+    <button onclick="wrCopyText('wrAnswerCode')" style="font-size:13px; padding:8px 12px; border:none; border-radius:8px; background:#424242; color:#fff; margin:4px 4px 4px 0;">📋 コピー</button>
+    <button class="primary" onclick="wrShareText('wrAnswerCode')" style="font-size:13px; padding:8px 12px; border:none; border-radius:8px; background:#2e7d32; color:#fff; font-weight:700; margin:4px 4px 4px 0;">📤 AirDropで共有</button>
   </div>
 
   <div id="wrStatus" style="font-size:13px; color:#ffcc00; margin:8px 0;">iPhone側の接続コードを待っています...</div>
+</div>
+
+<!-- QRコード読み取り用のカメラオーバーレイ -->
+<div id="wrScanOverlay" style="display:none; position:fixed; inset:0; background:#000; z-index:1000;">
+  <video id="wrScanVideo" playsinline autoplay muted style="width:100%; height:80%; object-fit:cover;"></video>
+  <div style="padding:16px; text-align:center;">
+    <div id="wrScanStatus" style="color:#fff; margin-bottom:10px;">QRコードにカメラを向けてください</div>
+    <button onclick="wrStopScan()" style="font-size:16px; padding:12px 24px; border:none; border-radius:10px; background:#d32f2f; color:#fff;">キャンセル</button>
+  </div>
 </div>
 
 <div id="app" style="display:none;">
@@ -818,12 +833,92 @@ async function wrCreateAnswer() {
     statusEl.textContent = "応答コードを生成中...";
     await wrWaitForIceGatheringComplete(wrPc);
 
-    document.getElementById("wrAnswerCode").value = wrEncodeDescription(wrPc.localDescription);
-    statusEl.textContent = "⚠️ 下の応答コードを、必ずiPhone側に送って「接続する」を押してもらってください(まだ接続は完了していません)";
+    const answerCode = wrEncodeDescription(wrPc.localDescription);
+    document.getElementById("wrAnswerCode").value = answerCode;
+    wrRenderQr("wrAnswerQr", answerCode);
+    statusEl.textContent = "⚠️ 下のQRコードをiPhoneに読み取ってもらってください(まだ接続は完了していません)";
     statusEl.style.color = "#ffcc00";
   } catch (err) {
     statusEl.textContent = "エラー: " + err.message;
   }
+}
+
+// ---------------------------------------------------
+// QRコード表示
+// ---------------------------------------------------
+function wrRenderQr(containerId, text) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+  if (typeof QRCode === "undefined") {
+    container.innerHTML = "<div style='color:#900; padding:8px;'>QR生成ライブラリを読み込めませんでした(インターネット接続を確認してください)。下のコードをコピー/共有ボタンでお送りください。</div>";
+    return;
+  }
+  const canvas = document.createElement("canvas");
+  container.appendChild(canvas);
+  QRCode.toCanvas(canvas, text, { width: 260, errorCorrectionLevel: "L" }, (err) => {
+    if (err) {
+      container.innerHTML = "<div style='color:#900; padding:8px;'>コードが長すぎてQR化できませんでした。下のコピー/共有ボタンをお使いください。</div>";
+      console.warn("QRコード生成エラー:", err);
+    }
+  });
+}
+
+// ---------------------------------------------------
+// QRコード読み取り(カメラでスキャン)
+// ---------------------------------------------------
+let wrScanStream = null;
+let wrScanRAF = null;
+let wrScanTargetInputId = null;
+
+async function wrStartScan(targetInputId) {
+  if (typeof jsQR === "undefined") {
+    alert("QR読み取りライブラリを読み込めませんでした(インターネット接続を確認してください)。手動貼り付けをお使いください。");
+    return;
+  }
+  wrScanTargetInputId = targetInputId;
+  const overlay = document.getElementById("wrScanOverlay");
+  const scanVideo = document.getElementById("wrScanVideo");
+  overlay.style.display = "block";
+
+  try {
+    wrScanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    scanVideo.srcObject = wrScanStream;
+    await scanVideo.play();
+    wrScanTick();
+  } catch (err) {
+    document.getElementById("wrScanStatus").textContent = "カメラを起動できませんでした: " + err.message;
+  }
+}
+
+function wrScanTick() {
+  const scanVideo = document.getElementById("wrScanVideo");
+  if (scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA) {
+    const canvas = document.createElement("canvas");
+    canvas.width = scanVideo.videoWidth;
+    canvas.height = scanVideo.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(scanVideo, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = jsQR(imageData.data, imageData.width, imageData.height);
+    if (result && result.data) {
+      document.getElementById(wrScanTargetInputId).value = result.data;
+      wrStopScan();
+      return;
+    }
+  }
+  wrScanRAF = requestAnimationFrame(wrScanTick);
+}
+
+function wrStopScan() {
+  if (wrScanRAF) cancelAnimationFrame(wrScanRAF);
+  wrScanRAF = null;
+  if (wrScanStream) {
+    wrScanStream.getTracks().forEach((t) => t.stop());
+    wrScanStream = null;
+  }
+  document.getElementById("wrScanOverlay").style.display = "none";
 }
 
 wrInit();
