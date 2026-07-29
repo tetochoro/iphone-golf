@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>2台連携 ゴルフスイング解析システム (下部固定版)</title>
+<title>2台連携 ゴルフスイング解析システム (マイク選択対応版)</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -112,6 +112,13 @@
     display: flex; align-items: center; gap: 4px; font-size: 11px; color: #00e5ff; font-weight: bold;
     background: #252525; padding: 4px 8px; border-radius: 6px; border: 1px solid #444; height: 32px; cursor: pointer; white-space: nowrap;
   }
+  
+  /* マイク選択セレクトボックスのスタイル */
+  #micSelect {
+    background: #252525; color: #00e5ff; border: 1px solid #444; border-radius: 6px;
+    font-size: 11px; height: 32px; max-width: 120px; padding: 0 4px; cursor: pointer;
+  }
+  
   .hidden { display: none !important; }
 </style>
 <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
@@ -195,6 +202,10 @@
           <label class="sound-toggle">
             <input type="checkbox" id="chkSound" style="width:14px; height:14px;"> 🔊自動録画
           </label>
+          <!-- マイク選択ドロップダウンメニュー -->
+          <select id="micSelect">
+            <option value="">マイク検索中...</option>
+          </select>
         </div>
       </div>
     </div>
@@ -282,6 +293,7 @@ let currentVolume = 0;
 let soundTriggerTs = null;
 let lastTriggerTime = 0;
 let audioCtx = null, analyser = null, micStream = null, volumeDataArray = null;
+let selectedMicId = "";
 
 const remoteVideo = document.getElementById("remoteVideo");
 const displayCanvas = document.getElementById("displayCanvas");
@@ -330,6 +342,7 @@ function initReceiver() {
   document.getElementById("roleSelect").classList.add("hidden");
   document.getElementById("receiverContainer").classList.remove("hidden");
   createReceiverPeer(TARGET_FIXED_ID);
+  updateMicList(); // 役割選択後にマイク一覧を取得
 }
 
 function setupCanvasSize() {
@@ -446,10 +459,43 @@ function finishClip(windowFrames) {
   startPlayTimer();
 }
 
-// ----------------- 音検知機能 -----------------
-async function startMic() {
+// ----------------- 音検知機能 (デバイス選択対応) -----------------
+async function updateMicList() {
+  const micSelect = document.getElementById("micSelect");
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // デバイス名取得のため初回権限要求
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter(device => device.kind === 'audioinput');
+    
+    micSelect.innerHTML = "";
+    audioInputs.forEach((device, index) => {
+      const option = document.createElement("option");
+      option.value = device.deviceId;
+      option.text = device.label || `マイク ${index + 1}`;
+      micSelect.appendChild(option);
+    });
+    
+    if (audioInputs.length > 0 && !selectedMicId) {
+      selectedMicId = audioInputs[0].deviceId;
+    }
+  } catch (e) {
+    console.warn("マイク一覧の取得に失敗しました:", e);
+    micSelect.innerHTML = '<option value="">選択不可</option>';
+  }
+}
+
+async function startMic() {
+  if (micStream) {
+    micStream.getTracks().forEach(track => track.stop());
+  }
+
+  const constraints = {
+    audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
+  };
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia(constraints);
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const source = audioCtx.createMediaStreamSource(micStream);
     analyser = audioCtx.createAnalyser();
@@ -458,8 +504,8 @@ async function startMic() {
     source.connect(analyser);
     requestAnimationFrame(pollVolume);
   } catch(e) {
-    console.warn("マイクの利用が許可されなかったか利用できません:", e);
-    alert("マイクの使用が許可されなかったため、自動音検知はオフになります。");
+    console.warn("マイクの起動に失敗しました:", e);
+    alert("指定されたマイクを開けませんでした。自動音検知をオフにします。");
     document.getElementById("chkSound").checked = false;
     soundEnabled = false;
     document.getElementById("volumeLabel").textContent = "OFF";
@@ -489,6 +535,13 @@ function pollVolume() {
 }
 
 // ----------------- イベントリスナー & 描画 -----------------
+document.getElementById("micSelect").addEventListener("change", (e) => {
+  selectedMicId = e.target.value;
+  if (soundEnabled) {
+    startMic(); // 有効化されている場合はマイクをリアルタイム切り替え
+  }
+});
+
 document.getElementById("btnRec").addEventListener("click", () => {
   stopPlayTimer();
   recStartTime = Date.now() / 1000;
@@ -627,6 +680,9 @@ function watchLoop() {
   }
   requestAnimationFrame(watchLoop);
 }
+
+// デバイスの接続変更（Bluetoothの接続/切断など）を検知してリストを自動更新
+navigator.mediaDevices.addEventListener('devicechange', updateMicList);
 
 watchLoop();
 </script>
