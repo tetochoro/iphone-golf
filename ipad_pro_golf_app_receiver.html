@@ -816,11 +816,23 @@ function wrInit() {
   let wrReceivedStream = null;
   let wrAppStarted = false;
 
+  // 「映像を受け取った(ontrack)」と「接続が完了した(connected)」は
+  // どちらが先に発生するか保証されていない。両方揃った時点で初めて
+  // 解析アプリ画面に切り替える(どちらのイベントからもこの関数を呼ぶ)
+  function tryStartApp() {
+    const iceOk = wrPc.iceConnectionState === "connected" || wrPc.iceConnectionState === "completed";
+    const connOk = wrPc.connectionState === "connected";
+    if (!wrAppStarted && wrReceivedStream && (connOk || iceOk)) {
+      wrAppStarted = true;
+      document.getElementById("webrtcSetup").style.display = "none";
+      document.getElementById("app").style.display = "";
+      startCamera(wrReceivedStream);
+    }
+  }
+
   wrPc.ontrack = (event) => {
-    // この時点ではまだ「映像を受け取る準備ができた」段階に過ぎず、
-    // 実際に接続(ICE/DTLS)が完了して映像データが届いているとは限らない。
-    // ここではストリームを保持するだけにし、画面はまだ切り替えない
     wrReceivedStream = event.streams[0];
+    tryStartApp();
   };
 
   wrPc.onconnectionstatechange = () => {
@@ -828,14 +840,15 @@ function wrInit() {
     if (wrPc.connectionState === "connected") {
       statusEl.textContent = "✅ 接続済み・受信中";
       statusEl.style.color = "#00ff00";
+      tryStartApp();
+    }
+  };
 
-      // 本当に接続が完了したこのタイミングで、はじめて解析アプリ画面に切り替える
-      if (!wrAppStarted && wrReceivedStream) {
-        wrAppStarted = true;
-        document.getElementById("webrtcSetup").style.display = "none";
-        document.getElementById("app").style.display = "";
-        startCamera(wrReceivedStream);
-      }
+  // connectionStateが環境によってはうまく"connected"にならないことがあるため、
+  // ICEレベルの接続状態も念のため監視しておく(保険)
+  wrPc.oniceconnectionstatechange = () => {
+    if (wrPc.iceConnectionState === "connected" || wrPc.iceConnectionState === "completed") {
+      tryStartApp();
     }
   };
 }
