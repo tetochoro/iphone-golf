@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>2台連携 ゴルフスイング解析システム (合言葉: 1212)</title>
+<title>2台連携 ゴルフスイング解析システム (UI修正版)</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -34,7 +34,7 @@
 
   /* iPad（受信・解析側）画面 */
   #receiverContainer { display: flex; flex-direction: column; width: 100%; height: 100%; position: relative; }
-  #videoWrap { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; }
+  #videoWrap { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; min-height: 0; }
   video#remoteVideo { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   canvas#displayCanvas, canvas#drawCanvas {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;
@@ -44,35 +44,51 @@
   #statusOverlay {
     position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
     background: rgba(0,0,0,0.65); padding: 6px 18px; border-radius: 12px;
-    font-size: 18px; font-weight: 700; z-index: 5; pointer-events: none; white-space: nowrap;
+    font-size: 16px; font-weight: 700; z-index: 5; pointer-events: none; white-space: nowrap;
   }
   #pairCodeOverlay {
     position: absolute; top: 10px; left: 10px;
-    background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 8px; font-size: 14px; z-index: 5;
+    background: rgba(0,0,0,0.7); padding: 6px 10px; border-radius: 8px; font-size: 12px; z-index: 5;
   }
-  #myIdDisplay { font-size: 20px; font-weight: bold; color: #0f0; font-family: monospace; }
+  #myIdDisplay { font-size: 16px; font-weight: bold; color: #0f0; font-family: monospace; }
 
-  /* 操作パネル */
+  /* 調整・修正済みの操作パネル */
   #controls {
-    flex: 0 0 auto; background: #1e1e1e; padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+    flex: 0 0 auto; background: #1a1a1a; padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #333;
   }
-  .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
-  .row.split > div { flex: 1 1 0; min-width: 0; }
-  label.small { font-size: 11px; color: #00e5ff; display: block; }
-  input[type=range] { width: 100%; height: 26px; -webkit-appearance: none; background: transparent; }
-  input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #555; border-radius: 3px; }
+  .row { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
+  .row.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+  
+  .control-group { display: flex; flex-direction: column; gap: 2px; }
+  label.small { font-size: 11px; color: #00e5ff; white-space: nowrap; }
+  
+  input[type=range] { width: 100%; height: 22px; -webkit-appearance: none; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #444; border-radius: 3px; }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
-    background: #fff; border: 2px solid #000; margin-top: -8px;
+    -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; border: 2px solid #000; margin-top: -7px;
   }
+  
+  .btn-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; justify-content: space-between; }
+  .btn-subgroup { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
   button.actionBtn {
-    font-size: 12px; padding: 6px 10px; border: none; border-radius: 8px; background: #424242; color: #fff;
+    font-size: 13px; padding: 7px 12px; border: none; border-radius: 8px; background: #3a3a3c; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; min-width: 36px;
   }
+  button.actionBtn:active { filter: brightness(1.3); }
   button.rec { background: #2e7d32; font-weight: bold; }
-  button.danger { background: #d32f2f; }
+  button.danger { background: #c62828; }
   button.live { background: #0288d1; }
-  .colorBtn { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #888; padding: 0; }
-  .colorBtn.selected { border-color: #fff; }
+  
+  .colorBtn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #666; padding: 0; cursor: pointer; flex-shrink: 0; }
+  .colorBtn.selected { border-color: #fff; transform: scale(1.1); }
+  
+  .sound-toggle {
+    display: flex; align-items: center; gap: 4px; font-size: 12px; color: #00e5ff; font-weight: bold;
+    background: #282828; padding: 4px 8px; border-radius: 6px; border: 1px solid #444;
+  }
   .hidden { display: none !important; }
 </style>
 <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
@@ -114,39 +130,51 @@
       </div>
     </div>
 
+    <!-- 調整版 操作パネル -->
     <div id="controls">
-      <div class="row split">
-        <div>
+      <!-- 1行目: 各種スライダー（グリッド配置で自動伸縮） -->
+      <div class="row sliders">
+        <div class="control-group">
           <label class="small" id="recLabel">録画時間: 10秒</label>
           <input type="range" id="recSlider" min="1" max="30" step="1" value="10">
         </div>
-        <div>
+        <div class="control-group">
           <label class="small">コマ送り(再生中)</label>
           <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
         </div>
-        <div>
-          <label class="small">🔊インパクト音 しきい値 (<span id="volumeLabel">0/20</span>)</label>
+        <div class="control-group">
+          <label class="small">🔊インパクト感度 (<span id="volumeLabel">0/20</span>)</label>
           <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20">
         </div>
       </div>
 
-      <div class="row">
-        <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
-        <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
-        <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
-        <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
-        <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
+      <!-- 2行目: ボタン群 & カラーピッカー -->
+      <div class="btn-group">
+        <!-- 色選択 -->
+        <div class="btn-subgroup">
+          <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
+          <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
+          <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
+          <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
+          <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
+          <button id="btnClear" class="actionBtn danger" title="線を消去">🧹</button>
+        </div>
 
-        <button id="btnRec" class="actionBtn rec">🔴 10秒録画</button>
-        <button id="btnPlay" class="actionBtn">⏯</button>
-        <button id="btnPrev" class="actionBtn">◀</button>
-        <button id="btnNext" class="actionBtn">▶</button>
-        <button id="btnClear" class="actionBtn danger">🧹</button>
-        <button id="btnLive" class="actionBtn live">📹 ライブ</button>
+        <!-- 再生・録画アクションボタン -->
+        <div class="btn-subgroup">
+          <button id="btnRec" class="actionBtn rec">🔴 10秒</button>
+          <button id="btnPlay" class="actionBtn">⏯</button>
+          <button id="btnPrev" class="actionBtn">◀</button>
+          <button id="btnNext" class="actionBtn">▶</button>
+          <button id="btnLive" class="actionBtn live">📹 ライブ</button>
+        </div>
 
-        <label style="display:flex; align-items:center; gap:2px; font-size:11px; color:#00e5ff;">
-          <input type="checkbox" id="chkSound"> 🔊音検知
-        </label>
+        <!-- 音検知トグル -->
+        <div class="btn-subgroup">
+          <label class="sound-toggle">
+            <input type="checkbox" id="chkSound" style="width:16px; height:16px;"> 🔊自動録画
+          </label>
+        </div>
       </div>
     </div>
   </div>
@@ -156,11 +184,10 @@
 <script>
 "use strict";
 
-// ================= 定数・設定 =================
-const TARGET_FIXED_ID = "1212"; // 固定の合言葉
+const TARGET_FIXED_ID = "1212";
 
 const CAPTURE_FPS = 30;
-const PLAYBACK_SPEED = 0.5; // 1/2スロー再生
+const PLAYBACK_SPEED = 0.5;
 const BUFFER_SECONDS = 33;
 const JPEG_QUALITY = 0.85;
 const BUFFER_STORE_WIDTH = 960;
@@ -186,12 +213,11 @@ async function initSender() {
     });
     document.getElementById("localVideo").srcObject = localStream;
     
-    // 送信側IDは重複を避けるため「cam-ランダム」
     const senderId = "cam-" + Math.random().toString(36).substring(2, 7);
     peer = new Peer(senderId, { debug: 1 });
     
     peer.on("open", () => {
-      statusEl.textContent = "準備完了。「iPadに接続」ボタンを押してください。";
+      statusEl.textContent = "準備完了。「iPadに接続」を押してください。";
     });
     peer.on("error", (err) => { statusEl.textContent = "エラー: " + err.type; });
   } catch(e) {
@@ -229,7 +255,6 @@ let lines = [];
 let drawing = false;
 let lastX = 0, lastY = 0;
 
-// 音検知用
 let soundEnabled = false;
 let soundThreshold = 20;
 let currentVolume = 0;
@@ -237,7 +262,6 @@ let soundTriggerTs = null;
 let lastTriggerTime = 0;
 let audioCtx = null, analyser = null, micStream = null, volumeDataArray = null;
 
-// Canvas & DOM
 const remoteVideo = document.getElementById("remoteVideo");
 const displayCanvas = document.getElementById("displayCanvas");
 const drawCanvas = document.getElementById("drawCanvas");
@@ -273,10 +297,9 @@ function createReceiverPeer(myId) {
   });
 
   peer.on("error", (err) => {
-    // もし他人が「1212」を使用中で重複エラーが出た場合、自動で「1212-1」等の代替IDに切り替え
     if (err.type === "unavailable-id") {
       const fallbackId = myId + "-1";
-      alert(`合言葉「${myId}」が他で使用されているため、「${fallbackId}」で待機します。iPhone側も「${fallbackId}」で接続してください。`);
+      alert(`合言葉「${myId}」が使用中のため「${fallbackId}」で待機します。iPhone側も「${fallbackId}」で接続してください。`);
       createReceiverPeer(fallbackId);
     }
   });
@@ -285,8 +308,6 @@ function createReceiverPeer(myId) {
 function initReceiver() {
   document.getElementById("roleSelect").classList.add("hidden");
   document.getElementById("receiverContainer").classList.remove("hidden");
-
-  // 固定の「1212」で起動
   createReceiverPeer(TARGET_FIXED_ID);
 }
 
@@ -485,7 +506,7 @@ document.getElementById("btnClear").addEventListener("click", () => { lines = []
 document.getElementById("recSlider").addEventListener("input", (e) => {
   recordSeconds = parseInt(e.target.value, 10);
   document.getElementById("recLabel").textContent = `録画時間: ${recordSeconds}秒`;
-  document.getElementById("btnRec").textContent = `🔴 ${recordSeconds}秒録画`;
+  document.getElementById("btnRec").textContent = `🔴 ${recordSeconds}秒`;
 });
 
 document.getElementById("seekSlider").addEventListener("input", (e) => {
