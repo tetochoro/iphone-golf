@@ -243,17 +243,26 @@ async function startScan(targetInputId) {
   scanTargetInputId = targetInputId;
   const overlay = document.getElementById("scanOverlay");
   const scanVideo = document.getElementById("scanVideo");
+  const scanStatusEl = document.getElementById("scanStatus");
   overlay.style.display = "block";
+  scanStatusEl.textContent = "カメラを起動しています...";
 
   try {
-    scanStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+    } catch (firstErr) {
+      console.warn("背面カメラでの起動に失敗、条件を緩めて再試行:", firstErr);
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
     scanVideo.srcObject = scanStream;
     await scanVideo.play();
+    scanStatusEl.textContent = "QRコードにカメラを向けてください";
     scanTick();
   } catch (err) {
-    document.getElementById("scanStatus").textContent = "カメラを起動できませんでした: " + err.message;
+    scanStatusEl.textContent = `カメラを起動できませんでした [${err.name}]: ${err.message}`;
+    console.error("QRスキャン用カメラの起動エラー:", err);
   }
 }
 

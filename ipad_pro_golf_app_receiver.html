@@ -898,17 +898,48 @@ async function wrStartScan(targetInputId) {
   wrScanTargetInputId = targetInputId;
   const overlay = document.getElementById("wrScanOverlay");
   const scanVideo = document.getElementById("wrScanVideo");
+  const scanStatusEl = document.getElementById("wrScanStatus");
   overlay.style.display = "block";
+  scanStatusEl.textContent = "カメラを起動しています...";
 
   try {
-    wrScanStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
+    try {
+      // まず背面カメラを優先して要求する
+      wrScanStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+    } catch (firstErr) {
+      console.warn("背面カメラでの起動に失敗、条件を緩めて再試行:", firstErr);
+      // 条件が厳しすぎて失敗した場合、指定を緩めてどのカメラでもよいので取得する
+      wrScanStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
     scanVideo.srcObject = wrScanStream;
-    await scanVideo.play();
+
+    // メインカメラと同様、メタデータ(サイズ情報)が取得できるまで確実に待つ。
+    // これを待たずにplay()だけ呼ぶと、ステータス表示は進むのに実際の映像が
+    // 真っ黒のまま更新されないことがある
+    await Promise.race([
+      new Promise((resolve) => {
+        if (scanVideo.readyState >= 1 && scanVideo.videoWidth > 0) {
+          resolve();
+        } else {
+          scanVideo.onloadedmetadata = () => resolve();
+        }
+      }),
+      new Promise((resolve) => setTimeout(resolve, 3000))
+    ]);
+
+    try {
+      await scanVideo.play();
+    } catch (playErr) {
+      console.warn("scanVideo.play()に失敗しましたが、処理を続行します:", playErr);
+    }
+
+    scanStatusEl.textContent = "QRコードにカメラを向けてください";
     wrScanTick();
   } catch (err) {
-    document.getElementById("wrScanStatus").textContent = "カメラを起動できませんでした: " + err.message;
+    scanStatusEl.textContent = `カメラを起動できませんでした [${err.name}]: ${err.message}`;
+    console.error("QRスキャン用カメラの起動エラー:", err);
   }
 }
 
