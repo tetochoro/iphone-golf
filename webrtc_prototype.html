@@ -42,6 +42,7 @@
      一度読み込めば、その後の接続作業自体はホットスポット内だけで完結する) -->
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 </head>
 <body>
 <div id="app">
@@ -145,10 +146,31 @@ function waitForIceGatheringComplete(peerConn) {
 }
 
 function encodeDescription(desc) {
-  return btoa(encodeURIComponent(JSON.stringify(desc)));
+  const json = JSON.stringify(desc);
+  if (typeof pako === "undefined") {
+    // 圧縮ライブラリが読み込めなかった場合の保険(圧縮なしで動作は継続する)
+    return btoa(encodeURIComponent(json));
+  }
+  const compressed = pako.deflate(json); // Uint8Array(だいぶ小さくなる)
+  let binary = "";
+  for (let i = 0; i < compressed.length; i++) binary += String.fromCharCode(compressed[i]);
+  return btoa(binary);
 }
 function decodeDescription(code) {
-  return JSON.parse(decodeURIComponent(atob(code.trim())));
+  const trimmed = code.trim();
+  if (typeof pako === "undefined") {
+    return JSON.parse(decodeURIComponent(atob(trimmed)));
+  }
+  try {
+    const binary = atob(trimmed);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const json = pako.inflate(bytes, { to: "string" });
+    return JSON.parse(json);
+  } catch (e) {
+    // 圧縮なしの古い形式のコードが貼り付けられた場合の保険
+    return JSON.parse(decodeURIComponent(atob(trimmed)));
+  }
 }
 
 // クリップボードから直接読み込む(共有シートで受け取った後、
