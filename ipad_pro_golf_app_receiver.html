@@ -109,7 +109,8 @@
 
 <!-- QRコード読み取り用のカメラオーバーレイ -->
 <div id="wrScanOverlay" style="display:none; position:fixed; inset:0; background:#000; z-index:1000;">
-  <video id="wrScanVideo" playsinline autoplay muted style="width:100%; height:80vh; object-fit:cover; background:#330000;"></video>
+  <video id="wrScanVideo" playsinline autoplay muted style="display:none;"></video>
+  <canvas id="wrScanPreview" style="width:100%; height:80vh; object-fit:cover; background:#330000; display:block;"></canvas>
   <div style="padding:16px; text-align:center;">
     <div id="wrScanStatus" style="color:#fff; margin-bottom:10px;">QRコードにカメラを向けてください</div>
     <button onclick="wrStopScan()" style="font-size:16px; padding:12px 24px; border:none; border-radius:10px; background:#d32f2f; color:#fff;">キャンセル</button>
@@ -958,6 +959,7 @@ let wrScanTickCount = 0;
 function wrScanTick() {
   const scanVideo = document.getElementById("wrScanVideo");
   const scanStatusEl = document.getElementById("wrScanStatus");
+  const previewCanvas = document.getElementById("wrScanPreview");
   wrScanTickCount++;
 
   // 30フレームに1回、映像の状態を診断表示に反映する(重すぎないように間引く)
@@ -968,13 +970,16 @@ function wrScanTick() {
       + `paused=${scanVideo.paused} tick=${wrScanTickCount}`;
   }
 
-  if (scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA) {
-    const canvas = document.createElement("canvas");
-    canvas.width = scanVideo.videoWidth;
-    canvas.height = scanVideo.videoHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(scanVideo, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  if (scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA && scanVideo.videoWidth > 0) {
+    // videoタグに直接表示せず、キャンバスに描画してから使う
+    // (videoタグ自体の描画が効かない端末があるため、本体アプリと同じ
+    //  「キャンバス経由で表示する」方式に統一する)
+    if (previewCanvas.width !== scanVideo.videoWidth) previewCanvas.width = scanVideo.videoWidth;
+    if (previewCanvas.height !== scanVideo.videoHeight) previewCanvas.height = scanVideo.videoHeight;
+    const pctx = previewCanvas.getContext("2d");
+    pctx.drawImage(scanVideo, 0, 0, previewCanvas.width, previewCanvas.height);
+
+    const imageData = pctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
     const result = jsQR(imageData.data, imageData.width, imageData.height);
     if (result && result.data) {
       document.getElementById(wrScanTargetInputId).value = result.data;
