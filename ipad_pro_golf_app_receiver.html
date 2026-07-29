@@ -911,7 +911,7 @@ async function wrStartScan(targetInputId) {
     try {
       // まず背面カメラを優先して要求する
       wrScanStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
       });
     } catch (firstErr) {
       console.warn("背面カメラでの起動に失敗、条件を緩めて再試行:", firstErr);
