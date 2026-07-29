@@ -891,6 +891,7 @@ let wrScanRAF = null;
 let wrScanTargetInputId = null;
 
 async function wrStartScan(targetInputId) {
+  wrScanTickCount = 0;
   if (typeof jsQR === "undefined") {
     alert("QR読み取りライブラリを読み込めませんでした(インターネット接続を確認してください)。手動貼り付けをお使いください。");
     return;
@@ -935,7 +936,17 @@ async function wrStartScan(targetInputId) {
       console.warn("scanVideo.play()に失敗しましたが、処理を続行します:", playErr);
     }
 
-    scanStatusEl.textContent = "QRコードにカメラを向けてください";
+    // 診断情報:実際に取得できた映像トラックの状態を画面に表示する
+    // (真っ黒のまま原因が分からない場合の手がかりにする)
+    const track = wrScanStream.getVideoTracks()[0];
+    const settings = track ? track.getSettings() : {};
+    const diagInfo = track
+      ? `track:${track.readyState}/muted=${track.muted}/enabled=${track.enabled} `
+        + `size:${settings.width || "?"}x${settings.height || "?"} `
+        + `video要素:${scanVideo.videoWidth}x${scanVideo.videoHeight} readyState=${scanVideo.readyState}`
+      : "映像トラックが見つかりません";
+    scanStatusEl.textContent = "QRコードにカメラを向けてください / " + diagInfo;
+    console.log("QRスキャン診断情報:", diagInfo);
     wrScanTick();
   } catch (err) {
     scanStatusEl.textContent = `カメラを起動できませんでした [${err.name}]: ${err.message}`;
@@ -943,8 +954,20 @@ async function wrStartScan(targetInputId) {
   }
 }
 
+let wrScanTickCount = 0;
 function wrScanTick() {
   const scanVideo = document.getElementById("wrScanVideo");
+  const scanStatusEl = document.getElementById("wrScanStatus");
+  wrScanTickCount++;
+
+  // 30フレームに1回、映像の状態を診断表示に反映する(重すぎないように間引く)
+  if (wrScanTickCount % 30 === 0) {
+    scanStatusEl.textContent =
+      `QRコードにカメラを向けてください / readyState=${scanVideo.readyState} `
+      + `videoサイズ=${scanVideo.videoWidth}x${scanVideo.videoHeight} `
+      + `paused=${scanVideo.paused} tick=${wrScanTickCount}`;
+  }
+
   if (scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA) {
     const canvas = document.createElement("canvas");
     canvas.width = scanVideo.videoWidth;
