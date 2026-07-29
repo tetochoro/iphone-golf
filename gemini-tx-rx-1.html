@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>2台連携 ゴルフスイング解析システム (UI修正版)</title>
+<title>2台連携 ゴルフスイング解析システム (修正版)</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -52,10 +52,10 @@
   }
   #myIdDisplay { font-size: 16px; font-weight: bold; color: #0f0; font-family: monospace; }
 
-  /* 調整・修正済みの操作パネル */
+  /* 下部操作パネル */
   #controls {
     flex: 0 0 auto; background: #1a1a1a; padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #333;
+    display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #333; z-index: 10;
   }
   .row { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
   .row.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
@@ -75,7 +75,7 @@
 
   button.actionBtn {
     font-size: 13px; padding: 7px 12px; border: none; border-radius: 8px; background: #3a3a3c; color: #fff;
-    display: inline-flex; align-items: center; justify-content: center; min-width: 36px;
+    display: inline-flex; align-items: center; justify-content: center; min-width: 36px; cursor: pointer;
   }
   button.actionBtn:active { filter: brightness(1.3); }
   button.rec { background: #2e7d32; font-weight: bold; }
@@ -87,7 +87,7 @@
   
   .sound-toggle {
     display: flex; align-items: center; gap: 4px; font-size: 12px; color: #00e5ff; font-weight: bold;
-    background: #282828; padding: 4px 8px; border-radius: 6px; border: 1px solid #444;
+    background: #282828; padding: 4px 8px; border-radius: 6px; border: 1px solid #444; cursor: pointer;
   }
   .hidden { display: none !important; }
 </style>
@@ -130,9 +130,9 @@
       </div>
     </div>
 
-    <!-- 調整版 操作パネル -->
+    <!-- 操作パネル -->
     <div id="controls">
-      <!-- 1行目: 各種スライダー（グリッド配置で自動伸縮） -->
+      <!-- 1行目: 各種スライダー -->
       <div class="row sliders">
         <div class="control-group">
           <label class="small" id="recLabel">録画時間: 10秒</label>
@@ -143,14 +143,13 @@
           <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
         </div>
         <div class="control-group">
-          <label class="small">🔊インパクト感度 (<span id="volumeLabel">0/20</span>)</label>
+          <label class="small">🔊インパクト感度 (<span id="volumeLabel">OFF</span>)</label>
           <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20">
         </div>
       </div>
 
       <!-- 2行目: ボタン群 & カラーピッカー -->
       <div class="btn-group">
-        <!-- 色選択 -->
         <div class="btn-subgroup">
           <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
           <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
@@ -160,7 +159,6 @@
           <button id="btnClear" class="actionBtn danger" title="線を消去">🧹</button>
         </div>
 
-        <!-- 再生・録画アクションボタン -->
         <div class="btn-subgroup">
           <button id="btnRec" class="actionBtn rec">🔴 10秒</button>
           <button id="btnPlay" class="actionBtn">⏯</button>
@@ -169,7 +167,6 @@
           <button id="btnLive" class="actionBtn live">📹 ライブ</button>
         </div>
 
-        <!-- 音検知トグル -->
         <div class="btn-subgroup">
           <label class="sound-toggle">
             <input type="checkbox" id="chkSound" style="width:16px; height:16px;"> 🔊自動録画
@@ -425,7 +422,7 @@ function finishClip(windowFrames) {
   startPlayTimer();
 }
 
-// ----------------- 音検知機能 -----------------
+// ----------------- 音検知機能 (エラーハンドリング強化) -----------------
 async function startMic() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -437,8 +434,11 @@ async function startMic() {
     source.connect(analyser);
     requestAnimationFrame(pollVolume);
   } catch(e) {
-    alert("マイク許可が必要です: " + e.message);
+    console.warn("マイクの利用が許可されなかったか利用できません:", e);
+    alert("マイクの使用が許可されなかったため、自動音検知はオフになります。");
     document.getElementById("chkSound").checked = false;
+    soundEnabled = false;
+    document.getElementById("volumeLabel").textContent = "OFF";
   }
 }
 
@@ -522,7 +522,11 @@ document.getElementById("thresholdSlider").addEventListener("input", (e) => {
 
 document.getElementById("chkSound").addEventListener("change", (e) => {
   soundEnabled = e.target.checked;
-  if (soundEnabled) startMic();
+  if (soundEnabled) {
+    startMic();
+  } else {
+    document.getElementById("volumeLabel").textContent = "OFF";
+  }
 });
 
 document.querySelectorAll(".colorBtn").forEach(btn => {
