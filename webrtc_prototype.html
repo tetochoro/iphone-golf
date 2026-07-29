@@ -38,6 +38,10 @@
     border-radius: 14px;
   }
 </style>
+<!-- QRコード生成・読み取り用ライブラリ(ページを開く時に1回だけ通信が必要。
+     一度読み込めば、その後の接続作業自体はホットスポット内だけで完結する) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
 <body>
 <div id="app">
@@ -68,14 +72,16 @@
       <video id="localVideo" autoplay playsinline muted></video>
     </div>
     <div class="card">
-      <h2>② このコードをiPadに送ってください(コピー)</h2>
-      <textarea id="offerCode" readonly placeholder="接続コードがここに表示されます..."></textarea>
+      <h2>② このQRコードをiPadに読み取ってもらってください</h2>
+      <div id="offerQr" style="background:#fff; padding:10px; border-radius:8px; display:inline-block; min-height:40px;"></div>
+      <textarea id="offerCode" readonly placeholder="接続コードがここに表示されます..." style="margin-top:6px;"></textarea>
       <button onclick="copyText('offerCode')">📋 コピー</button>
       <button class="primary" onclick="shareText('offerCode')">📤 AirDropで共有</button>
     </div>
     <div class="card">
-      <h2>③ iPad側で出た「応答コード」をここに貼り付け</h2>
-      <textarea id="answerInput" placeholder="ここにiPadで表示されたコードを貼り付けてください"></textarea>
+      <h2>③ iPad側で出た「応答コード」を読み取る</h2>
+      <button class="primary" onclick="startScan('answerInput')">📷 QRコードを読み取る</button>
+      <textarea id="answerInput" placeholder="QRコードを読み取るか、ここに直接貼り付けてください" style="margin-top:6px;"></textarea>
       <button onclick="pasteText('answerInput')">📥 クリップボードから貼り付け</button>
       <button class="primary" onclick="applyAnswer()">🔗 接続する</button>
     </div>
@@ -85,14 +91,16 @@
   <div id="receiverUI" class="hidden">
     <div id="statusR">準備中...</div>
     <div class="card">
-      <h2>① iPhone側で出た「接続コード」をここに貼り付け</h2>
-      <textarea id="offerInput" placeholder="ここにiPhoneで表示されたコードを貼り付けてください"></textarea>
+      <h2>① iPhone側の「接続コード」を読み取る</h2>
+      <button class="primary" onclick="startScan('offerInput')">📷 QRコードを読み取る</button>
+      <textarea id="offerInput" placeholder="QRコードを読み取るか、ここに直接貼り付けてください" style="margin-top:6px;"></textarea>
       <button onclick="pasteText('offerInput')">📥 クリップボードから貼り付け</button>
       <button class="primary" onclick="createAnswer()">✅ 応答コードを作成</button>
     </div>
     <div class="card">
-      <h2>② このコードをiPhoneに送ってください(コピー)</h2>
-      <textarea id="answerCode" readonly placeholder="応答コードがここに表示されます..."></textarea>
+      <h2>② このQRコードをiPhoneに読み取ってもらってください</h2>
+      <div id="answerQr" style="background:#fff; padding:10px; border-radius:8px; display:inline-block; min-height:40px;"></div>
+      <textarea id="answerCode" readonly placeholder="応答コードがここに表示されます..." style="margin-top:6px;"></textarea>
       <button onclick="copyText('answerCode')">📋 コピー</button>
       <button class="primary" onclick="shareText('answerCode')">📤 AirDropで共有</button>
     </div>
@@ -100,6 +108,15 @@
       <h2>③ 受信した映像</h2>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
+  </div>
+</div>
+
+<!-- QRコード読み取り用のカメラオーバーレイ -->
+<div id="scanOverlay" style="display:none; position:fixed; inset:0; background:#000; z-index:1000;">
+  <video id="scanVideo" playsinline autoplay muted style="width:100%; height:80%; object-fit:cover;"></video>
+  <div style="padding:16px; text-align:center;">
+    <div id="scanStatus" style="color:#fff; margin-bottom:10px;">QRコードにカメラを向けてください</div>
+    <button onclick="stopScan()" style="font-size:16px; padding:12px 24px; border:none; border-radius:10px; background:#d32f2f; color:#fff;">キャンセル</button>
   </div>
 </div>
 
@@ -169,6 +186,84 @@ async function shareText(id) {
   }
 }
 
+// ---------------------------------------------------
+// QRコード表示
+// ---------------------------------------------------
+function renderQr(containerId, text) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+  if (typeof QRCode === "undefined") {
+    container.innerHTML = "<div style='color:#900; padding:8px;'>QR生成ライブラリを読み込めませんでした(インターネット接続を確認してください)。下のコードをコピー/共有ボタンでお送りください。</div>";
+    return;
+  }
+  const canvas = document.createElement("canvas");
+  container.appendChild(canvas);
+  QRCode.toCanvas(canvas, text, { width: 260, errorCorrectionLevel: "L" }, (err) => {
+    if (err) {
+      container.innerHTML = "<div style='color:#900; padding:8px;'>コードが長すぎてQR化できませんでした。下のコピー/共有ボタンをお使いください。</div>";
+      console.warn("QRコード生成エラー:", err);
+    }
+  });
+}
+
+// ---------------------------------------------------
+// QRコード読み取り(カメラでスキャン)
+// ---------------------------------------------------
+let scanStream = null;
+let scanRAF = null;
+let scanTargetInputId = null;
+
+async function startScan(targetInputId) {
+  if (typeof jsQR === "undefined") {
+    alert("QR読み取りライブラリを読み込めませんでした(インターネット接続を確認してください)。手動貼り付けをお使いください。");
+    return;
+  }
+  scanTargetInputId = targetInputId;
+  const overlay = document.getElementById("scanOverlay");
+  const scanVideo = document.getElementById("scanVideo");
+  overlay.style.display = "block";
+
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    scanVideo.srcObject = scanStream;
+    await scanVideo.play();
+    scanTick();
+  } catch (err) {
+    document.getElementById("scanStatus").textContent = "カメラを起動できませんでした: " + err.message;
+  }
+}
+
+function scanTick() {
+  const scanVideo = document.getElementById("scanVideo");
+  if (scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA) {
+    const canvas = document.createElement("canvas");
+    canvas.width = scanVideo.videoWidth;
+    canvas.height = scanVideo.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(scanVideo, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = jsQR(imageData.data, imageData.width, imageData.height);
+    if (result && result.data) {
+      document.getElementById(scanTargetInputId).value = result.data;
+      stopScan();
+      return;
+    }
+  }
+  scanRAF = requestAnimationFrame(scanTick);
+}
+
+function stopScan() {
+  if (scanRAF) cancelAnimationFrame(scanRAF);
+  scanRAF = null;
+  if (scanStream) {
+    scanStream.getTracks().forEach((t) => t.stop());
+    scanStream = null;
+  }
+  document.getElementById("scanOverlay").style.display = "none";
+}
+
 function showRole(role) {
   document.getElementById("roleSelect").classList.add("hidden");
   document.getElementById("senderUI").classList.toggle("hidden", role !== "sender");
@@ -206,8 +301,10 @@ async function startSender() {
     statusEl.textContent = "接続コードを生成中...";
     await waitForIceGatheringComplete(pc);
 
-    document.getElementById("offerCode").value = encodeDescription(pc.localDescription);
-    statusEl.textContent = "上のコードをコピーして、iPadに送ってください";
+    const offerCode = encodeDescription(pc.localDescription);
+    document.getElementById("offerCode").value = offerCode;
+    renderQr("offerQr", offerCode);
+    statusEl.textContent = "上のQRコードをiPadに読み取ってもらってください";
   } catch (err) {
     statusEl.textContent = "エラー: " + err.message;
   }
@@ -263,8 +360,10 @@ async function createAnswer() {
     statusEl.textContent = "応答コードを生成中...";
     await waitForIceGatheringComplete(pc);
 
-    document.getElementById("answerCode").value = encodeDescription(pc.localDescription);
-    statusEl.textContent = "上のコードをコピーして、iPhoneに送ってください";
+    const answerCode = encodeDescription(pc.localDescription);
+    document.getElementById("answerCode").value = answerCode;
+    renderQr("answerQr", answerCode);
+    statusEl.textContent = "上のQRコードをiPhoneに読み取ってもらってください";
   } catch (err) {
     statusEl.textContent = "エラー: " + err.message;
   }
