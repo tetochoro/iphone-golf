@@ -876,7 +876,10 @@ function wrRenderQr(containerId, text) {
   }
   const canvas = document.createElement("canvas");
   container.appendChild(canvas);
-  QRCode.toCanvas(canvas, text, { width: 260, errorCorrectionLevel: "L" }, (err) => {
+  // データ量が多いと模様が細かくなるため、できるだけ大きく表示して
+  // 1マスあたりのピクセル数を確保する(小さいと読み取れなくなる)
+  const qrSize = Math.min(window.innerWidth - 40, 480);
+  QRCode.toCanvas(canvas, text, { width: qrSize, errorCorrectionLevel: "L" }, (err) => {
     if (err) {
       container.innerHTML = "<div style='color:#900; padding:8px;'>コードが長すぎてQR化できませんでした。下のコピー/共有ボタンをお使いください。</div>";
       console.warn("QRコード生成エラー:", err);
