@@ -59,12 +59,20 @@
     max-width: calc(100% - 12px - env(safe-area-inset-left) - env(safe-area-inset-right));
   }
 
-  /* ---------------- 上部バー ---------------- */
-  #topBar {
+  /* ---------------- 上部バー(2段に分割し、縦画面の幅に収める) ---------------- */
+  #topBar1 {
     top: calc(4px + env(safe-area-inset-top));
     left: calc(6px + env(safe-area-inset-left));
     right: calc(6px + env(safe-area-inset-right));
-    height: 36px; justify-content: space-between; 
+    height: 32px; justify-content: space-between;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  #topBar2 {
+    top: calc(4px + 32px + 4px + env(safe-area-inset-top));
+    left: calc(6px + env(safe-area-inset-left));
+    right: calc(6px + env(safe-area-inset-right));
+    height: 30px; justify-content: space-around;
     overflow-x: auto;
     white-space: nowrap;
   }
@@ -75,12 +83,20 @@
   .top-item label { font-size: 9px; color: #aaa; font-weight: bold; white-space: nowrap; }
   .val-disp { font-size: 9px; color: #00e5ff; font-weight: bold; }
 
-  /* ---------------- 下部バー ---------------- */
-  #bottomBar {
+  /* ---------------- 下部バー(2段に分割し、縦画面の幅に収める) ---------------- */
+  #bottomBar1 {
+    bottom: calc(4px + 40px + 4px + env(safe-area-inset-bottom));
+    left: calc(6px + env(safe-area-inset-left));
+    right: calc(6px + env(safe-area-inset-right));
+    height: 30px; justify-content: center;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  #bottomBar2 {
     bottom: calc(4px + env(safe-area-inset-bottom));
     left: calc(6px + env(safe-area-inset-left));
     right: calc(6px + env(safe-area-inset-right));
-    height: 40px; justify-content: space-between; 
+    height: 40px; justify-content: space-between;
     overflow-x: auto;
     white-space: nowrap;
   }
@@ -161,15 +177,18 @@
       <canvas id="drawCanvas"></canvas>
     </div>
 
-    <!-- 【 1行目：上部バー 】 -->
-    <div id="topBar" class="bar-overlay">
+    <!-- 【 1行目：上部バー(1段目) 】 -->
+    <div id="topBar1" class="bar-overlay">
       <div class="status-badge">1212|<span id="statusOverlay">待機</span></div>
-      
+
       <div class="top-item">
         <label id="delayLabel" style="color:#00e5ff;">⏱ 3.0s</label>
-        <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0" style="width:40px;">
+        <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0" style="width:60px;">
       </div>
+    </div>
 
+    <!-- 【 1行目：上部バー(2段目) 】 -->
+    <div id="topBar2" class="bar-overlay">
       <div class="top-item">
         <label style="color:#00e5ff; cursor:pointer;">
           <input type="checkbox" id="chkSound" style="width:12px; height:12px; vertical-align:middle;"> 音検知
@@ -191,10 +210,8 @@
       </div>
     </div>
 
-    <!-- 【 2行目：下部バー 】 -->
-    <div id="bottomBar" class="bar-overlay">
-      
-      <!-- 描画カラー & 消去 -->
+    <!-- 【 2行目：下部バー(1段目・カラー選択) 】 -->
+    <div id="bottomBar1" class="bar-overlay">
       <div class="color-group">
         <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
         <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
@@ -203,15 +220,17 @@
         <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
         <button id="btnClear" class="largeBtn danger icon-only" style="height:22px; width:22px; font-size:10px;" title="消去">🧹</button>
       </div>
+    </div>
 
-      <!-- 操作ボタン群 -->
+    <!-- 【 2行目：下部バー(2段目・操作ボタン) 】 -->
+    <div id="bottomBar2" class="bar-overlay">
       <div style="display:flex; align-items:center; gap:3px;">
         <button id="btnDelay" class="largeBtn delay">⏱遅延</button>
         <button id="btnRec" class="largeBtn rec">🔴10s</button>
         <button id="btnPlay" class="largeBtn icon-only">⏯</button>
         <button id="btnPrev" class="largeBtn icon-only">◀</button>
         <button id="btnNext" class="largeBtn icon-only">▶</button>
-        
+
         <!-- コマ送りスライダー -->
         <div style="width:45px; display:flex; flex-direction:column; gap:0px;">
           <span style="font-size:7px; color:#aaa; text-align:center; line-height:1;">コマ送</span>
@@ -220,7 +239,6 @@
 
         <button id="btnLive" class="largeBtn live">📹生</button>
       </div>
-
     </div>
 
   </div>
