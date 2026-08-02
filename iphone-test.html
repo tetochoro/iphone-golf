@@ -4,12 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>2台連携 ゴルフスイング解析システム (iPhone最適化版)</title>
+<title>2台連携 ゴルフスイング解析システム</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   
-  /* iPhoneの動的ツールバー対策（dvh）と画面フィット */
   html, body {
     margin: 0; padding: 0;
     width: 100%;
@@ -39,7 +38,7 @@
     background: #111; color: #0f0; width: 100%; text-align: center; letter-spacing: 2px;
   }
 
-  /* 3. 受信・解析画面（iPhone横画面ぴったり化） */
+  /* 3. 受信・解析画面 */
   #receiverContainer { width: 100%; height: 100%; position: relative; overflow: hidden; }
 
   /* 映像エリア */
@@ -48,13 +47,13 @@
   canvas#displayCanvas, canvas#drawCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
   #drawCanvas { touch-action: none; }
 
-  /* バーの共通スタイル（はみ出しを防止する厳格な幅・余白指定） */
+  /* バーの共通スタイル (超省スペース化) */
   .bar-overlay {
     position: absolute; z-index: 10; pointer-events: auto;
     background: rgba(18, 18, 20, 0.85); backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.6);
-    display: flex; align-items: center; gap: 4px; padding: 0 6px;
+    display: flex; align-items: center; gap: 2px; padding: 0 4px;
     box-sizing: border-box;
     max-width: calc(100% - 12px - env(safe-area-inset-left) - env(safe-area-inset-right));
   }
@@ -64,49 +63,41 @@
     top: calc(4px + env(safe-area-inset-top));
     left: calc(6px + env(safe-area-inset-left));
     right: calc(6px + env(safe-area-inset-right));
-    height: 36px; justify-content: space-between; 
+    height: 32px; justify-content: space-between; 
     overflow-x: auto;
     white-space: nowrap;
   }
   
-  .status-badge { font-size: 10px; font-weight: bold; color: #0f0; white-space: nowrap; flex-shrink: 0; }
+  .status-badge { font-size: 9px; font-weight: bold; white-space: nowrap; flex-shrink: 0; }
   
   .top-item { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-  .top-item label { font-size: 9px; color: #aaa; font-weight: bold; white-space: nowrap; }
-  .val-disp { font-size: 9px; color: #00e5ff; font-weight: bold; }
+  .top-item label { font-size: 8px; color: #aaa; font-weight: bold; white-space: nowrap; }
+  .val-disp { font-size: 8px; color: #00e5ff; font-weight: bold; }
 
   /* ---------------- 下部バー ---------------- */
   #bottomBar {
     bottom: calc(4px + env(safe-area-inset-bottom));
     left: calc(6px + env(safe-area-inset-left));
     right: calc(6px + env(safe-area-inset-right));
-    height: 40px; justify-content: space-between; 
+    height: 34px; justify-content: space-between; 
     overflow-x: auto;
     white-space: nowrap;
   }
 
-  /* 小型カラーパレット */
-  .color-group { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
-  .colorBtn {
-    width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.4);
-    padding: 0; cursor: pointer; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-  }
-  .colorBtn.selected { border-color: #fff; transform: scale(1.1); box-shadow: 0 0 6px #fff; }
-
   /* スライダーデザイン */
-  input[type=range] { height: 16px; -webkit-appearance: none; background: transparent; }
-  input[type=range]::-webkit-slider-runnable-track { height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; }
+  input[type=range] { height: 14px; -webkit-appearance: none; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; background: rgba(255,255,255,0.2); border-radius: 2px; }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
-    background: #fff; border: 1.5px solid #000; margin-top: -4px; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%;
+    background: #fff; border: 1px solid #000; margin-top: -3.5px; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
 
   /* 超コンパクトボタン */
   button.largeBtn {
-    font-size: 10px; font-weight: bold; height: 28px; padding: 0 6px;
-    border: none; border-radius: 6px; color: #fff;
+    font-size: 9px; font-weight: bold; height: 24px; padding: 0 4px;
+    border: none; border-radius: 5px; color: #fff;
     background: rgba(50, 50, 55, 0.9);
-    display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 1px;
     cursor: pointer; border: 1px solid rgba(255,255,255,0.2);
     box-shadow: 0 2px 5px rgba(0,0,0,0.4); white-space: nowrap; flex-shrink: 0;
   }
@@ -116,11 +107,11 @@
   button.rec { background: rgba(46, 125, 50, 0.9); }
   button.danger { background: rgba(198, 40, 40, 0.9); }
   button.live { background: rgba(2, 136, 209, 0.9); }
-  button.icon-only { width: 28px; padding: 0; font-size: 12px; }
+  button.icon-only { width: 24px; padding: 0; font-size: 10px; }
 
   #micSelect {
     background: rgba(40, 40, 40, 0.9); color: #00e5ff; border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 4px; font-size: 9px; height: 20px; font-weight: bold; padding: 0 1px; max-width: 55px;
+    border-radius: 4px; font-size: 8px; height: 18px; font-weight: bold; padding: 0 1px; max-width: 50px;
   }
   
   .hidden { display: none !important; }
@@ -163,16 +154,16 @@
 
     <!-- 【 1行目：上部バー 】 -->
     <div id="topBar" class="bar-overlay">
-      <div class="status-badge">1212|<span id="statusOverlay">待機</span></div>
+      <div class="status-badge"><span id="statusOverlay" style="color:#0f0;">接続待機</span></div>
       
       <div class="top-item">
         <label id="delayLabel" style="color:#00e5ff;">⏱ 3.0s</label>
-        <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0" style="width:40px;">
+        <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0" style="width:35px;">
       </div>
 
       <div class="top-item">
         <label style="color:#00e5ff; cursor:pointer;">
-          <input type="checkbox" id="chkSound" style="width:12px; height:12px; vertical-align:middle;"> 音検知
+          <input type="checkbox" id="chkSound" style="width:11px; height:11px; vertical-align:middle;"> 音検知
         </label>
       </div>
 
@@ -182,30 +173,23 @@
 
       <div class="top-item">
         <label>感度:<span id="volumeLabel" class="val-disp">OFF</span></label>
-        <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20" style="width:35px;">
+        <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20" style="width:30px;">
       </div>
 
       <div class="top-item">
         <label id="recLabel">🔴10s</label>
-        <input type="range" id="recSlider" min="1" max="30" step="1" value="10" style="width:35px;">
+        <input type="range" id="recSlider" min="1" max="30" step="1" value="10" style="width:30px;">
       </div>
     </div>
 
     <!-- 【 2行目：下部バー 】 -->
     <div id="bottomBar" class="bar-overlay">
       
-      <!-- 描画カラー & 消去 -->
-      <div class="color-group">
-        <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
-        <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
-        <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
-        <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
-        <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
-        <button id="btnClear" class="largeBtn danger icon-only" style="height:22px; width:22px; font-size:10px;" title="消去">🧹</button>
-      </div>
+      <!-- 消去ボタン（赤1色固定のためパレット削除） -->
+      <button id="btnClear" class="largeBtn danger icon-only" style="height:22px; width:22px; font-size:10px;" title="消去">🧹</button>
 
       <!-- 操作ボタン群 -->
-      <div style="display:flex; align-items:center; gap:3px;">
+      <div style="display:flex; align-items:center; gap:2px;">
         <button id="btnDelay" class="largeBtn delay">⏱遅延</button>
         <button id="btnRec" class="largeBtn rec">🔴10s</button>
         <button id="btnPlay" class="largeBtn icon-only">⏯</button>
@@ -213,8 +197,8 @@
         <button id="btnNext" class="largeBtn icon-only">▶</button>
         
         <!-- コマ送りスライダー -->
-        <div style="width:45px; display:flex; flex-direction:column; gap:0px;">
-          <span style="font-size:7px; color:#aaa; text-align:center; line-height:1;">コマ送</span>
+        <div style="width:40px; display:flex; flex-direction:column; gap:0px;">
+          <span style="font-size:6px; color:#aaa; text-align:center; line-height:1;">コマ送</span>
           <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
         </div>
 
@@ -297,7 +281,8 @@ let playTimer = null;
 let buffer = [];
 const bufferMax = Math.round(CAPTURE_FPS * BUFFER_SECONDS);
 
-let currentColor = "#ff3b30";
+// 線描画色（赤色に固定）
+const currentColor = "#ff3b30";
 let lines = [];
 let drawing = false;
 let lastX = 0, lastY = 0;
@@ -325,7 +310,7 @@ const bctx = bufferCanvas.getContext("2d");
 function createReceiverPeer(myId) {
   peer = new Peer(myId, { debug: 1 });
 
-  peer.on("open", () => { setStatus("待機", "#00ff00"); });
+  peer.on("open", () => { setStatus("接続待機", "#00ff00"); });
 
   peer.on("call", (call) => {
     setStatus("接続中", "#00e5ff");
@@ -344,7 +329,6 @@ function createReceiverPeer(myId) {
   peer.on("error", (err) => {
     if (err.type === "unavailable-id") {
       const fallbackId = myId + "-1";
-      alert(`合言葉「${myId}」が使用中のため「${fallbackId}」で待機します。`);
       createReceiverPeer(fallbackId);
     }
   });
@@ -652,15 +636,7 @@ document.getElementById("chkSound").addEventListener("change", (e) => {
   }
 });
 
-document.querySelectorAll(".colorBtn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    currentColor = btn.dataset.color;
-    document.querySelectorAll(".colorBtn").forEach(b => b.classList.remove("selected"));
-    btn.classList.add("selected");
-  });
-});
-
-// 線引きジェスチャー
+// 線引きジェスチャー（赤色固定で描画）
 function getPos(e) {
   const rect = drawCanvas.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
