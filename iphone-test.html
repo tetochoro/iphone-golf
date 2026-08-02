@@ -11,12 +11,10 @@
   
   html, body {
     margin: 0; padding: 0;
-    width: 100%;
-    height: 100vh;
+    width: 100%; height: 100%;
     height: 100dvh;
     background: #000; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif;
-    overflow: hidden; user-select: none;
-    position: fixed;
+    overflow: hidden; user-select: none; position: fixed;
   }
   
   #app { width: 100%; height: 100%; position: relative; overflow: hidden; }
@@ -47,71 +45,65 @@
   canvas#displayCanvas, canvas#drawCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
   #drawCanvas { touch-action: none; }
 
-  /* バーの共通スタイル (超省スペース化) */
+  /* バーの共通スタイル (超省スペース & 画面からはみ出さない完全縮小設定) */
   .bar-overlay {
     position: absolute; z-index: 10; pointer-events: auto;
     background: rgba(18, 18, 20, 0.85); backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.6);
-    display: flex; align-items: center; gap: 2px; padding: 0 4px;
-    box-sizing: border-box;
-    max-width: calc(100% - 12px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 2px; padding: 0 4px; box-sizing: border-box;
+    left: calc(4px + env(safe-area-inset-left));
+    right: calc(4px + env(safe-area-inset-right));
+    width: calc(100% - 8px - env(safe-area-inset-left) - env(safe-area-inset-right));
   }
 
   /* ---------------- 上部バー ---------------- */
   #topBar {
     top: calc(4px + env(safe-area-inset-top));
-    left: calc(6px + env(safe-area-inset-left));
-    right: calc(6px + env(safe-area-inset-right));
-    height: 32px; justify-content: space-between; 
-    overflow-x: auto;
-    white-space: nowrap;
+    height: 28px;
   }
   
   .status-badge { font-size: 9px; font-weight: bold; white-space: nowrap; flex-shrink: 0; }
   
-  .top-item { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .top-item { display: flex; align-items: center; gap: 1px; flex-shrink: 1; min-width: 0; }
   .top-item label { font-size: 8px; color: #aaa; font-weight: bold; white-space: nowrap; }
   .val-disp { font-size: 8px; color: #00e5ff; font-weight: bold; }
 
   /* ---------------- 下部バー ---------------- */
   #bottomBar {
     bottom: calc(4px + env(safe-area-inset-bottom));
-    left: calc(6px + env(safe-area-inset-left));
-    right: calc(6px + env(safe-area-inset-right));
-    height: 34px; justify-content: space-between; 
-    overflow-x: auto;
-    white-space: nowrap;
+    height: 30px;
   }
 
-  /* スライダーデザイン */
-  input[type=range] { height: 14px; -webkit-appearance: none; background: transparent; }
-  input[type=range]::-webkit-slider-runnable-track { height: 3px; background: rgba(255,255,255,0.2); border-radius: 2px; }
+  /* 極小スライダーデザイン */
+  input[type=range] { height: 12px; -webkit-appearance: none; background: transparent; margin: 0; }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; background: rgba(255,255,255,0.3); border-radius: 1px; }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%;
-    background: #fff; border: 1px solid #000; margin-top: -3.5px; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    -webkit-appearance: none; width: 9px; height: 9px; border-radius: 50%;
+    background: #fff; border: 1px solid #000; margin-top: -3.5px;
   }
 
-  /* 超コンパクトボタン */
+  /* 超極小ボタン */
   button.largeBtn {
-    font-size: 9px; font-weight: bold; height: 24px; padding: 0 4px;
-    border: none; border-radius: 5px; color: #fff;
+    font-size: 8px; font-weight: bold; height: 22px; padding: 0 3px;
+    border: none; border-radius: 4px; color: #fff;
     background: rgba(50, 50, 55, 0.9);
-    display: inline-flex; align-items: center; justify-content: center; gap: 1px;
+    display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer; border: 1px solid rgba(255,255,255,0.2);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.4); white-space: nowrap; flex-shrink: 0;
+    white-space: nowrap; flex-shrink: 0;
   }
-  button.largeBtn:active { transform: scale(0.95); filter: brightness(1.2); }
+  button.largeBtn:active { transform: scale(0.92); filter: brightness(1.2); }
   
   button.delay { background: rgba(230, 81, 0, 0.9); }
   button.rec { background: rgba(46, 125, 50, 0.9); }
   button.danger { background: rgba(198, 40, 40, 0.9); }
   button.live { background: rgba(2, 136, 209, 0.9); }
-  button.icon-only { width: 24px; padding: 0; font-size: 10px; }
+  button.icon-only { width: 20px; padding: 0; font-size: 9px; }
 
   #micSelect {
     background: rgba(40, 40, 40, 0.9); color: #00e5ff; border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 4px; font-size: 8px; height: 18px; font-weight: bold; padding: 0 1px; max-width: 50px;
+    border-radius: 3px; font-size: 8px; height: 16px; font-weight: bold; padding: 0; max-width: 42px;
   }
   
   .hidden { display: none !important; }
@@ -154,42 +146,43 @@
 
     <!-- 【 1行目：上部バー 】 -->
     <div id="topBar" class="bar-overlay">
-      <div class="status-badge"><span id="statusOverlay" style="color:#0f0;">接続待機</span></div>
+      <!-- 1212待機 表示を完全削除し、ステータスのみシンプルに表示 -->
+      <div class="status-badge"><span id="statusOverlay" style="color:#0f0;">待機</span></div>
       
       <div class="top-item">
-        <label id="delayLabel" style="color:#00e5ff;">⏱ 3.0s</label>
-        <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0" style="width:35px;">
+        <label id="delayLabel" style="color:#00e5ff;">⏱3s</label>
+        <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0" style="width:25px;">
       </div>
 
       <div class="top-item">
         <label style="color:#00e5ff; cursor:pointer;">
-          <input type="checkbox" id="chkSound" style="width:11px; height:11px; vertical-align:middle;"> 音検知
+          <input type="checkbox" id="chkSound" style="width:10px; height:10px; vertical-align:middle;"> 音
         </label>
       </div>
 
       <div class="top-item">
-        <select id="micSelect"><option value="">マイク</option></select>
+        <select id="micSelect"><option value="">MIC</option></select>
       </div>
 
       <div class="top-item">
-        <label>感度:<span id="volumeLabel" class="val-disp">OFF</span></label>
-        <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20" style="width:30px;">
+        <label>感:<span id="volumeLabel" class="val-disp">OFF</span></label>
+        <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20" style="width:22px;">
       </div>
 
       <div class="top-item">
         <label id="recLabel">🔴10s</label>
-        <input type="range" id="recSlider" min="1" max="30" step="1" value="10" style="width:30px;">
+        <input type="range" id="recSlider" min="1" max="30" step="1" value="10" style="width:22px;">
       </div>
     </div>
 
     <!-- 【 2行目：下部バー 】 -->
     <div id="bottomBar" class="bar-overlay">
       
-      <!-- 消去ボタン（赤1色固定のためパレット削除） -->
-      <button id="btnClear" class="largeBtn danger icon-only" style="height:22px; width:22px; font-size:10px;" title="消去">🧹</button>
+      <!-- 線描画：赤1色固定のためパレット完全削除／消去ボタンのみ設置 -->
+      <button id="btnClear" class="largeBtn danger icon-only" style="height:20px; width:20px; font-size:9px;" title="消去">🧹</button>
 
       <!-- 操作ボタン群 -->
-      <div style="display:flex; align-items:center; gap:2px;">
+      <div style="display:flex; align-items:center; gap:2px; flex-shrink:0;">
         <button id="btnDelay" class="largeBtn delay">⏱遅延</button>
         <button id="btnRec" class="largeBtn rec">🔴10s</button>
         <button id="btnPlay" class="largeBtn icon-only">⏯</button>
@@ -197,8 +190,8 @@
         <button id="btnNext" class="largeBtn icon-only">▶</button>
         
         <!-- コマ送りスライダー -->
-        <div style="width:40px; display:flex; flex-direction:column; gap:0px;">
-          <span style="font-size:6px; color:#aaa; text-align:center; line-height:1;">コマ送</span>
+        <div style="width:32px; display:flex; flex-direction:column; gap:0px; flex-shrink:1;">
+          <span style="font-size:6px; color:#aaa; text-align:center; line-height:1;">コマ</span>
           <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
         </div>
 
@@ -281,7 +274,7 @@ let playTimer = null;
 let buffer = [];
 const bufferMax = Math.round(CAPTURE_FPS * BUFFER_SECONDS);
 
-// 線描画色（赤色に固定）
+// 線描画色（赤色固定）
 const currentColor = "#ff3b30";
 let lines = [];
 let drawing = false;
@@ -310,7 +303,7 @@ const bctx = bufferCanvas.getContext("2d");
 function createReceiverPeer(myId) {
   peer = new Peer(myId, { debug: 1 });
 
-  peer.on("open", () => { setStatus("接続待機", "#00ff00"); });
+  peer.on("open", () => { setStatus("待機", "#00ff00"); });
 
   peer.on("call", (call) => {
     setStatus("接続中", "#00e5ff");
@@ -488,7 +481,7 @@ async function updateMicList() {
     audioInputs.forEach((device, index) => {
       const option = document.createElement("option");
       option.value = device.deviceId;
-      option.text = device.label || `マイク ${index + 1}`;
+      option.text = device.label || `MIC${index + 1}`;
       micSelect.appendChild(option);
     });
     
@@ -597,14 +590,14 @@ document.getElementById("btnLive").addEventListener("click", () => {
   isPlaying = false;
   lines = [];
   state = "LIVE";
-  setStatus("LIVE表示", "#00ff00");
+  setStatus("LIVE", "#00ff00");
 });
 
 document.getElementById("btnClear").addEventListener("click", () => { lines = []; redrawLines(); });
 
 document.getElementById("delaySlider").addEventListener("input", (e) => {
   delaySeconds = parseFloat(e.target.value);
-  document.getElementById("delayLabel").textContent = `⏱ ${delaySeconds.toFixed(1)}s`;
+  document.getElementById("delayLabel").textContent = `⏱${delaySeconds.toFixed(1)}s`;
   if (state === "DELAY") {
     setStatus(`遅延(${delaySeconds.toFixed(1)}s)`, "#ff9800");
   }
@@ -636,7 +629,7 @@ document.getElementById("chkSound").addEventListener("change", (e) => {
   }
 });
 
-// 線引きジェスチャー（赤色固定で描画）
+// 線引きジェスチャー（赤色で描画）
 function getPos(e) {
   const rect = drawCanvas.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
@@ -684,7 +677,7 @@ function watchLoop() {
   const now = Date.now() / 1000;
   if (soundTriggerTs !== null) {
     const elapsed = now - soundTriggerTs;
-    setStatus(`🔊検知!${Math.max(0, POST_SECONDS - elapsed).toFixed(1)}s`, "#ff9100");
+    setStatus(`🔊${Math.max(0, POST_SECONDS - elapsed).toFixed(1)}s`, "#ff9100");
     if (elapsed >= POST_SECONDS) {
       const triggerTs = soundTriggerTs;
       soundTriggerTs = null;
@@ -694,7 +687,7 @@ function watchLoop() {
     }
   } else if (state === "RECORDING") {
     const elapsed = now - recStartTime;
-    setStatus(`🔴録画中${Math.max(0, recordSeconds - elapsed).toFixed(1)}s`, "#ff3d00");
+    setStatus(`🔴${Math.max(0, recordSeconds - elapsed).toFixed(1)}s`, "#ff3d00");
     if (elapsed >= recordSeconds) {
       const windowFrames = buffer.filter(f => f.ts >= (now - recordSeconds)).sort((a, b) => a.ts - b.ts);
       finishClip(windowFrames);
