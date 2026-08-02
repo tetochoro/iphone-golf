@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>2台連携 ゴルフスイング解析システム (全画面＆大型UI版)</title>
+<title>2台連携 ゴルフスイング解析システム (四隅分散・大型UI版)</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -16,9 +16,7 @@
     overflow: hidden; user-select: none;
   }
   
-  #app {
-    width: 100%; height: 100%; position: relative; overflow: hidden;
-  }
+  #app { width: 100%; height: 100%; position: relative; overflow: hidden; }
   
   /* 1. 役割選択画面 */
   #roleSelect {
@@ -38,56 +36,69 @@
   }
 
   /* 3. iPad（受信・解析側）画面：全画面化 */
-  #receiverContainer {
-    width: 100%; height: 100%; position: relative; overflow: hidden;
-  }
+  #receiverContainer { width: 100%; height: 100%; position: relative; overflow: hidden; }
 
   /* 映像エリア：画面全体 */
-  #videoWrap {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background: #000; overflow: hidden;
-  }
+  #videoWrap { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
   video#remoteVideo { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-  canvas#displayCanvas, canvas#drawCanvas {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;
-  }
+  canvas#displayCanvas, canvas#drawCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
   #drawCanvas { touch-action: none; }
 
-  /* 上部オーバーレイ：ステータス＆設定（スライダー） */
+  /* 共通パネルスタイル */
+  .overlay-panel {
+    position: absolute; z-index: 10; pointer-events: auto;
+    background: rgba(20, 20, 20, 0.75); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+
+  /* ---------------- 上部エリア (1行固定・スリム化) ---------------- */
   #topOverlay {
-    position: absolute;
-    top: calc(10px + env(safe-area-inset-top));
-    left: 12px; right: 12px;
-    z-index: 10; pointer-events: none;
-    display: flex; flex-direction: column; gap: 8px;
+    top: calc(8px + env(safe-area-inset-top)); left: 12px; right: 12px;
+    height: 48px; padding: 0 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
   
-  .status-bar {
-    display: flex; justify-content: space-between; align-items: center;
-  }
+  .status-badge { font-size: 14px; font-weight: bold; color: #0f0; white-space: nowrap; }
   
-  #statusOverlay {
-    background: rgba(0,0,0,0.75); padding: 8px 16px; border-radius: 20px;
-    font-size: 16px; font-weight: bold; backdrop-filter: blur(8px);
+  .top-slider-group {
+    display: flex; align-items: center; gap: 8px; flex: 1; max-width: 320px;
   }
-  
-  #pairCodeOverlay {
-    background: rgba(0,0,0,0.75); padding: 8px 14px; border-radius: 12px;
-    font-size: 13px; backdrop-filter: blur(8px);
-  }
-  #myIdDisplay { font-size: 15px; font-weight: bold; color: #0f0; font-family: monospace; }
+  .top-slider-group label { font-size: 13px; color: #00e5ff; font-weight: bold; white-space: nowrap; }
 
-  .slider-panel {
-    pointer-events: auto;
-    background: rgba(20, 20, 20, 0.75);
-    backdrop-filter: blur(10px);
-    border-radius: 14px; padding: 10px 14px;
-    display: flex; gap: 16px; width: 100%; border: 1px solid rgba(255,255,255,0.1);
+  /* ---------------- 左側エリア (設定・感度・録画時間) ---------------- */
+  #leftOverlay {
+    top: calc(64px + env(safe-area-inset-top)); left: 12px;
+    width: 170px; padding: 12px;
+    display: flex; flex-direction: column; gap: 12px;
   }
 
-  .control-group { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  label.small { font-size: 12px; color: #00e5ff; font-weight: bold; white-space: nowrap; }
-  
+  .control-unit { display: flex; flex-direction: column; gap: 4px; }
+  .control-unit label { font-size: 12px; color: #aaa; font-weight: bold; }
+  .val-disp { font-size: 13px; color: #00e5ff; font-weight: bold; }
+
+  /* ---------------- 右側エリア (描画カラー＆消去・大型縦並び) ---------------- */
+  #rightOverlay {
+    top: calc(64px + env(safe-area-inset-top)); right: 12px;
+    padding: 10px;
+    display: flex; flex-direction: column; gap: 12px; align-items: center;
+  }
+
+  .colorBtn {
+    width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.4);
+    padding: 0; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .colorBtn.selected { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 12px #fff; }
+
+  /* ---------------- 下部エリア (メイン大型操作系) ---------------- */
+  #bottomOverlay {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    left: 50%; transform: translateX(-50%);
+    padding: 8px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  /* スライダー共通デザイン */
   input[type=range] { width: 100%; height: 24px; -webkit-appearance: none; background: transparent; }
   input[type=range]::-webkit-slider-runnable-track { height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; }
   input[type=range]::-webkit-slider-thumb {
@@ -95,63 +106,26 @@
     background: #fff; border: 2px solid #000; margin-top: -8px; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
   }
 
-  /* 下部オーバーレイ：大型操作ボタン群 */
-  #bottomOverlay {
-    position: absolute;
-    bottom: calc(12px + env(safe-area-inset-bottom));
-    left: 12px; right: 12px;
-    z-index: 10;
-    display: flex; flex-direction: column; gap: 10px; pointer-events: none;
-  }
-
-  .button-row {
-    pointer-events: auto;
-    display: flex; items-center; justify-content: space-between; gap: 10px; width: 100%;
-  }
-
-  .btn-group-left, .btn-group-center, .btn-group-right {
-    display: flex; align-items: center; gap: 8px;
-  }
-
   /* ボタン大型化 */
   button.largeBtn {
-    font-size: 16px; font-weight: bold; height: 52px; padding: 0 16px;
-    border: none; border-radius: 12px; color: #fff;
-    background: rgba(45, 45, 48, 0.85); backdrop-filter: blur(10px);
+    font-size: 16px; font-weight: bold; height: 56px; padding: 0 20px;
+    border: none; border-radius: 14px; color: #fff;
+    background: rgba(50, 50, 55, 0.9);
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    cursor: pointer; border: 1px solid rgba(255,255,255,0.15);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    cursor: pointer; border: 1px solid rgba(255,255,255,0.2);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4); white-space: nowrap;
   }
-  button.largeBtn:active { transform: scale(0.96); filter: brightness(1.2); }
+  button.largeBtn:active { transform: scale(0.95); filter: brightness(1.2); }
   
   button.delay { background: rgba(230, 81, 0, 0.9); }
   button.rec { background: rgba(46, 125, 50, 0.9); }
   button.danger { background: rgba(198, 40, 40, 0.9); }
   button.live { background: rgba(2, 136, 209, 0.9); }
-  button.icon-only { width: 52px; padding: 0; font-size: 20px; }
+  button.icon-only { width: 56px; padding: 0; font-size: 22px; }
 
-  /* 色選択ボタン大型化 */
-  .colorBtn {
-    width: 38px; height: 38px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.4);
-    padding: 0; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-  }
-  .colorBtn.selected { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 10px #fff; }
-
-  /* 自動録画トグル＆マイク選択 */
-  .sound-card {
-    pointer-events: auto;
-    background: rgba(20, 20, 20, 0.85); backdrop-filter: blur(10px);
-    padding: 6px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
-    display: flex; align-items: center; gap: 10px; height: 52px;
-  }
-  
-  .sound-toggle {
-    display: flex; align-items: center; gap: 6px; font-size: 13px; color: #00e5ff; font-weight: bold; cursor: pointer;
-  }
-  
   #micSelect {
     background: rgba(40, 40, 40, 0.9); color: #00e5ff; border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 8px; font-size: 12px; height: 36px; max-width: 130px; padding: 0 6px; font-weight: bold;
+    border-radius: 8px; font-size: 11px; height: 32px; width: 100%; font-weight: bold; padding: 0 4px;
   }
   
   .hidden { display: none !important; }
@@ -182,7 +156,7 @@
     </div>
   </div>
 
-  <!-- 3. iPad (受信・スイング解析) UI - 全画面オーバーレイ仕様 -->
+  <!-- 3. iPad (受信・スイング解析) UI - 四隅分散型全画面オーバーレイ -->
   <div id="receiverContainer" class="hidden">
     
     <!-- 全画面映像表示エリア -->
@@ -192,70 +166,66 @@
       <canvas id="drawCanvas"></canvas>
     </div>
 
-    <!-- 上部オーバーレイ情報＆調整スライダー -->
-    <div id="topOverlay">
-      <div class="status-bar">
-        <div id="pairCodeOverlay">合言葉: <span id="myIdDisplay">1212</span></div>
-        <div id="statusOverlay">接続待機中...</div>
-      </div>
-
-      <div class="slider-panel">
-        <div class="control-group">
-          <label class="small" id="delayLabel">⏱ 遅延: 3.0秒</label>
-          <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0">
-        </div>
-        <div class="control-group">
-          <label class="small" id="recLabel">🔴 録画: 10秒</label>
-          <input type="range" id="recSlider" min="1" max="30" step="1" value="10">
-        </div>
-        <div class="control-group">
-          <label class="small">🎞 コマ送り</label>
-          <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
-        </div>
-        <div class="control-group">
-          <label class="small">🔊 感度 (<span id="volumeLabel">OFF</span>)</label>
-          <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20">
-        </div>
+    <!-- 【上部】ステータス & 遅延スライダー (1行スリム化) -->
+    <div id="topOverlay" class="overlay-panel">
+      <div class="status-badge">合言葉: 1212 | <span id="statusOverlay">待機中...</span></div>
+      <div class="top-slider-group">
+        <label id="delayLabel">⏱ 遅延: 3.0s</label>
+        <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0">
       </div>
     </div>
 
-    <!-- 下部オーバーレイ大型操作ボタン群 -->
-    <div id="bottomOverlay">
-      <div class="button-row">
-        
-        <!-- 左: 線描画カラー＆消去 -->
-        <div class="btn-group-left">
-          <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
-          <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
-          <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
-          <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
-          <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
-          <button id="btnClear" class="largeBtn danger icon-only" title="線を消去">🧹</button>
-        </div>
-
-        <!-- 中央: メインモード操作 -->
-        <div class="btn-group-center">
-          <button id="btnDelay" class="largeBtn delay">⏱ 遅延再生</button>
-          <button id="btnRec" class="largeBtn rec">🔴 10秒録画</button>
-          <button id="btnPlay" class="largeBtn icon-only">⏯</button>
-          <button id="btnPrev" class="largeBtn icon-only">◀</button>
-          <button id="btnNext" class="largeBtn icon-only">▶</button>
-          <button id="btnLive" class="largeBtn live">📹 ライブ</button>
-        </div>
-
-        <!-- 右: 音検知トグル＆マイク選択 -->
-        <div class="btn-group-right">
-          <div class="sound-card">
-            <label class="sound-toggle">
-              <input type="checkbox" id="chkSound" style="width:18px; height:18px;"> 🔊自動録画
-            </label>
-            <select id="micSelect">
-              <option value="">マイク検索中...</option>
-            </select>
-          </div>
-        </div>
-
+    <!-- 【左側】音検知・録画時間設定パネル -->
+    <div id="leftOverlay" class="overlay-panel">
+      <div class="control-unit">
+        <label>🔊 インパクト自動録画</label>
+        <label style="display:flex; align-items:center; gap:6px; color:#00e5ff; cursor:pointer;">
+          <input type="checkbox" id="chkSound" style="width:20px; height:20px;"> 有効化
+        </label>
       </div>
+
+      <div class="control-unit">
+        <label>マイク選択</label>
+        <select id="micSelect"><option value="">検索中...</option></select>
+      </div>
+
+      <div class="control-unit">
+        <label>感度 (<span id="volumeLabel" class="val-disp">OFF</span>)</label>
+        <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20">
+      </div>
+
+      <div class="control-unit" style="margin-top:4px;">
+        <label id="recLabel">🔴 録画: 10秒</label>
+        <input type="range" id="recSlider" min="1" max="30" step="1" value="10">
+      </div>
+    </div>
+
+    <!-- 【右側】描画カラー & 消去 (大型縦列) -->
+    <div id="rightOverlay" class="overlay-panel">
+      <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
+      <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
+      <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
+      <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
+      <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
+      <div style="height:4px;"></div>
+      <button id="btnClear" class="largeBtn danger icon-only" title="線を消去">🧹</button>
+    </div>
+
+    <!-- 【下部】メイン操作コントロール (超大型ボタン群) -->
+    <div id="bottomOverlay" class="overlay-panel">
+      <button id="btnDelay" class="largeBtn delay">⏱ 遅延再生</button>
+      <button id="btnRec" class="largeBtn rec">🔴 10秒録画</button>
+      <button id="btnPlay" class="largeBtn icon-only">⏯</button>
+      <button id="btnPrev" class="largeBtn icon-only">◀</button>
+      <button id="btnNext" class="largeBtn icon-only">▶</button>
+      
+      <!-- コマ送り用スライダー (コンパクト化) -->
+      <div style="width:100px; display:flex; flex-direction:column; gap:2px;">
+        <span style="font-size:10px; color:#aaa; text-align:center;">コマ送り</span>
+        <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
+      </div>
+
+      <button id="btnLive" class="largeBtn live">📹 ライブ</button>
     </div>
 
   </div>
@@ -358,21 +328,20 @@ const bufferCanvas = document.createElement("canvas");
 const bctx = bufferCanvas.getContext("2d");
 
 function createReceiverPeer(myId) {
-  document.getElementById("myIdDisplay").textContent = myId;
   peer = new Peer(myId, { debug: 1 });
 
   peer.on("open", () => {
-    setStatus(`合言葉 [ ${myId} ] 待機中`, "#00ff00");
+    setStatus("受信待機中", "#00ff00");
   });
 
   peer.on("call", (call) => {
-    setStatus("接続処理中...", "#00e5ff");
+    setStatus("接続中...", "#00e5ff");
     call.answer();
 
     call.on("stream", (stream) => {
       remoteVideo.srcObject = stream;
       remoteVideo.play().then(() => {
-        setStatus("LIVE - リアルタイム表示中", "#00ff00");
+        setStatus("LIVE 受信中", "#00ff00");
         setupCanvasSize();
         requestAnimationFrame(captureLoop);
       }).catch(e => console.error("Play error:", e));
@@ -492,7 +461,7 @@ async function showReviewFrame(idx) {
   } finally {
     playbackBusy = false;
   }
-  setStatus(`コマ: ${idx + 1} / ${reviewFrames.length} (${isPlaying ? "スロー再生中" : "停止"})`, "#ffff00");
+  setStatus(`再生 (${idx + 1}/${reviewFrames.length})`, "#ffff00");
 }
 
 function startPlayTimer() {
@@ -615,7 +584,7 @@ document.getElementById("btnDelay").addEventListener("click", () => {
   isPlaying = false;
   lines = [];
   state = "DELAY";
-  setStatus(`⏱ 遅延再生中 (${delaySeconds.toFixed(1)}s)`, "#ff9800");
+  setStatus(`⏱ 遅延再生 (${delaySeconds.toFixed(1)}s)`, "#ff9800");
 });
 
 document.getElementById("btnRec").addEventListener("click", () => {
@@ -651,16 +620,16 @@ document.getElementById("btnLive").addEventListener("click", () => {
   isPlaying = false;
   lines = [];
   state = "LIVE";
-  setStatus("LIVE - リアルタイム表示中", "#00ff00");
+  setStatus("LIVE 表示中", "#00ff00");
 });
 
 document.getElementById("btnClear").addEventListener("click", () => { lines = []; redrawLines(); });
 
 document.getElementById("delaySlider").addEventListener("input", (e) => {
   delaySeconds = parseFloat(e.target.value);
-  document.getElementById("delayLabel").textContent = `⏱ 遅延: ${delaySeconds.toFixed(1)}秒`;
+  document.getElementById("delayLabel").textContent = `⏱ 遅延: ${delaySeconds.toFixed(1)}s`;
   if (state === "DELAY") {
-    setStatus(`⏱ 遅延再生中 (${delaySeconds.toFixed(1)}s)`, "#ff9800");
+    setStatus(`⏱ 遅延再生 (${delaySeconds.toFixed(1)}s)`, "#ff9800");
   }
 });
 
@@ -746,7 +715,7 @@ function watchLoop() {
   const now = Date.now() / 1000;
   if (soundTriggerTs !== null) {
     const elapsed = now - soundTriggerTs;
-    setStatus(`🔊インパクト検知! 残り ${Math.max(0, POST_SECONDS - elapsed).toFixed(1)}s`, "#ff9100");
+    setStatus(`🔊検知! 残り${Math.max(0, POST_SECONDS - elapsed).toFixed(1)}s`, "#ff9100");
     if (elapsed >= POST_SECONDS) {
       const triggerTs = soundTriggerTs;
       soundTriggerTs = null;
@@ -756,7 +725,7 @@ function watchLoop() {
     }
   } else if (state === "RECORDING") {
     const elapsed = now - recStartTime;
-    setStatus(`🔴 録画中... 残り ${Math.max(0, recordSeconds - elapsed).toFixed(1)}s`, "#ff3d00");
+    setStatus(`🔴 録画中... 残り${Math.max(0, recordSeconds - elapsed).toFixed(1)}s`, "#ff3d00");
     if (elapsed >= recordSeconds) {
       const windowFrames = buffer.filter(f => f.ts >= (now - recordSeconds)).sort((a, b) => a.ts - b.ts);
       finishClip(windowFrames);
