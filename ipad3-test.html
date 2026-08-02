@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>2台連携 ゴルフスイング解析システム (遅延再生対応版)</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    background: #1e1e1e; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif;
+    overflow: hidden; user-select: none;
+  }
+  
+  #app {
+    width: 100%; height: 100%; position: relative; overflow: hidden;
+  }
+  
+  /* 1. 役割選択画面 */
+  #roleSelect {
+    padding: 20px; display: flex; flex-direction: column; gap: 16px; justify-content: center; height: 100%;
+  }
+  .card { background: #2a2a2a; border-radius: 12px; padding: 16px; }
+  .roleBtn { width: 100%; padding: 20px; font-size: 18px; font-weight: bold; border-radius: 12px; border: none; color: #fff; cursor: pointer; }
+  .btn-iphone { background: #2e7d32; }
+  .btn-ipad { background: #0288d1; }
+  
+  /* 2. iPhone（送信側）画面 */
+  #senderUI { padding: 16px; display: flex; flex-direction: column; gap: 12px; height: 100%; }
+  #localVideo { width: 100%; height: 40vh; background: #000; border-radius: 10px; object-fit: contain; }
+  input[type=text] {
+    font-size: 24px; padding: 10px; border-radius: 8px; border: 1px solid #555;
+    background: #111; color: #0f0; width: 100%; text-align: center; letter-spacing: 2px;
+  }
+
+  /* 3. iPad（受信・解析側）画面 */
+  #receiverContainer {
+    width: 100%; height: 100%; position: relative;
+  }
+
+  /* 映像表示領域：下部操作パネルの高さ分空ける */
+  #videoWrap {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    bottom: calc(110px + env(safe-area-inset-bottom));
+    background: #000; overflow: hidden;
+  }
+  video#remoteVideo { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  canvas#displayCanvas, canvas#drawCanvas {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;
+  }
+  #drawCanvas { touch-action: none; }
+
+  #statusOverlay {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.65); padding: 6px 18px; border-radius: 12px;
+    font-size: 15px; font-weight: 700; z-index: 5; pointer-events: none; white-space: nowrap;
+  }
+  #pairCodeOverlay {
+    position: absolute; top: 10px; left: 10px;
+    background: rgba(0,0,0,0.7); padding: 6px 10px; border-radius: 8px; font-size: 12px; z-index: 5;
+  }
+  #myIdDisplay { font-size: 14px; font-weight: bold; color: #0f0; font-family: monospace; }
+
+  /* 下部操作パネル：画面最下部に固定配置 */
+  #controls {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: calc(110px + env(safe-area-inset-bottom));
+    background: #181818;
+    padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; justify-content: center; gap: 6px;
+    border-top: 1px solid #333; z-index: 100;
+  }
+
+  .row-sliders {
+    display: flex; gap: 12px; width: 100%;
+  }
+  .control-group { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  label.small { font-size: 11px; color: #00e5ff; white-space: nowrap; }
+  
+  input[type=range] { width: 100%; height: 18px; -webkit-appearance: none; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 5px; background: #333; border-radius: 3px; }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 2px solid #000; margin-top: -6px;
+  }
+  
+  .row-buttons {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; gap: 6px; flex-wrap: nowrap;
+  }
+  .btn-subgroup { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+
+  button.actionBtn {
+    font-size: 12px; padding: 4px 8px; border: none; border-radius: 6px; background: #3a3a3c; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; height: 32px; cursor: pointer; white-space: nowrap;
+  }
+  button.actionBtn:active { filter: brightness(1.3); }
+  button.rec { background: #2e7d32; font-weight: bold; }
+  button.danger { background: #c62828; }
+  button.live { background: #0288d1; }
+  button.delay { background: #e65100; font-weight: bold; }
+  
+  .colorBtn { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #666; padding: 0; cursor: pointer; flex-shrink: 0; }
+  .colorBtn.selected { border-color: #fff; transform: scale(1.15); }
+  
+  .sound-toggle {
+    display: flex; align-items: center; gap: 4px; font-size: 11px; color: #00e5ff; font-weight: bold;
+    background: #252525; padding: 4px 8px; border-radius: 6px; border: 1px solid #444; height: 32px; cursor: pointer; white-space: nowrap;
+  }
+  
+  #micSelect {
+    background: #252525; color: #00e5ff; border: 1px solid #444; border-radius: 6px;
+    font-size: 11px; height: 32px; max-width: 120px; padding: 0 4px; cursor: pointer;
+  }
+  
+  .hidden { display: none !important; }
+</style>
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+</head>
+<body>
+<div id="app">
+
+  <!-- 1. 役割選択画面 -->
+  <div id="roleSelect">
+    <div class="card">
+      <h2 style="margin-top:0;">端末の役割を選択</h2>
+      <button class="roleBtn btn-iphone" onclick="initSender()">📱 送信側 (iPhoneカメラ)</button>
+      <div style="height:12px;"></div>
+      <button class="roleBtn btn-ipad" onclick="initReceiver()">📺 受信・解析側 (iPad)</button>
+    </div>
+  </div>
+
+  <!-- 2. iPhone (送信側) UI -->
+  <div id="senderUI" class="hidden">
+    <div id="senderStatus" style="color:#ffcc00; font-weight:bold;">カメラ準備中...</div>
+    <video id="localVideo" autoplay playsinline muted></video>
+    <div class="card">
+      <label style="font-size:12px; color:#aaa;">合言葉 (固定: 1212)</label>
+      <input type="text" id="targetIdInput" value="1212" autocapitalize="off">
+      <button class="roleBtn btn-iphone" onclick="connectToReceiver()" style="margin-top:10px; padding:12px;">🔗 iPadに接続</button>
+    </div>
+  </div>
+
+  <!-- 3. iPad (受信・スイング解析) UI -->
+  <div id="receiverContainer" class="hidden">
+    <!-- 上部: 映像表示エリア -->
+    <div id="videoWrap">
+      <video id="remoteVideo" autoplay playsinline muted></video>
+      <canvas id="displayCanvas"></canvas>
+      <canvas id="drawCanvas"></canvas>
+      
+      <div id="statusOverlay">接続待機中...</div>
+      <div id="pairCodeOverlay">
+        合言葉: <span id="myIdDisplay">1212</span>
+      </div>
+    </div>
+
+    <!-- 下部: 画面最下部固定の操作パネル -->
+    <div id="controls">
+      <!-- スライダー行 -->
+      <div class="row-sliders">
+        <div class="control-group">
+          <label class="small" id="delayLabel">遅延時間: 3.0秒</label>
+          <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0">
+        </div>
+        <div class="control-group">
+          <label class="small" id="recLabel">録画時間: 10秒</label>
+          <input type="range" id="recSlider" min="1" max="30" step="1" value="10">
+        </div>
+        <div class="control-group">
+          <label class="small">コマ送り(再生中)</label>
+          <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
+        </div>
+        <div class="control-group">
+          <label class="small">🔊インパクト感度 (<span id="volumeLabel">OFF</span>)</label>
+          <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20">
+        </div>
+      </div>
+
+      <!-- ボタン行 -->
+      <div class="row-buttons">
+        <div class="btn-subgroup">
+          <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
+          <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
+          <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
+          <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
+          <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
+          <button id="btnClear" class="actionBtn danger" title="線を消去">🧹</button>
+        </div>
+
+        <div class="btn-subgroup">
+          <button id="btnDelay" class="actionBtn delay">⏱ 遅延再生</button>
+          <button id="btnRec" class="actionBtn rec">🔴 10秒</button>
+          <button id="btnPlay" class="actionBtn">⏯</button>
+          <button id="btnPrev" class="actionBtn">◀</button>
+          <button id="btnNext" class="actionBtn">▶</button>
+          <button id="btnLive" class="actionBtn live">📹 ライブ</button>
+        </div>
+
+        <div class="btn-subgroup">
+          <label class="sound-toggle">
+            <input type="checkbox" id="chkSound" style="width:14px; height:14px;"> 🔊自動録画
+          </label>
+          <select id="micSelect">
+            <option value="">マイク検索中...</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+const TARGET_FIXED_ID = "1212";
+
+const CAPTURE_FPS = 30;
+const PLAYBACK_SPEED = 0.5;
+const BUFFER_SECONDS = 33;
+const JPEG_QUALITY = 0.85;
+const BUFFER_STORE_WIDTH = 960;
+
+const PRE_SECONDS = 3.0;
+const POST_SECONDS = 3.0;
+const TRIGGER_COOLDOWN_SECONDS = 3.0;
+
+let peer = null;
+
+// ================= 送信側 (iPhone) ロジック =================
+let localStream = null;
+
+async function initSender() {
+  document.getElementById("roleSelect").classList.add("hidden");
+  document.getElementById("senderUI").classList.remove("hidden");
+  const statusEl = document.getElementById("senderStatus");
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    document.getElementById("localVideo").srcObject = localStream;
+    
+    const senderId = "cam-" + Math.random().toString(36).substring(2, 7);
+    peer = new Peer(senderId, { debug: 1 });
+    
+    peer.on("open", () => {
+      statusEl.textContent = "準備完了。「iPadに接続」を押してください。";
+    });
+    peer.on("error", (err) => { statusEl.textContent = "エラー: " + err.type; });
+  } catch(e) {
+    statusEl.textContent = "カメラ起動エラー: " + e.message;
+  }
+}
+
+function connectToReceiver() {
+  const targetId = document.getElementById("targetIdInput").value.trim().toLowerCase();
+  const statusEl = document.getElementById("senderStatus");
+  if (!targetId || !peer || !localStream) return;
+
+  statusEl.textContent = `iPad (${targetId}) へ発信中...`;
+  const call = peer.call(targetId, localStream);
+  
+  call.on("close", () => { statusEl.textContent = "接続が切断されました"; });
+  setTimeout(() => { statusEl.textContent = "✅ 送信中 (iPad側で映像を確認してください)"; }, 1500);
+}
+
+// ================= 受信・解析側 (iPad) ロジック =================
+let state = "LIVE"; // LIVE, DELAY, RECORDING, REVIEW
+let delaySeconds = 3.0;
+let recordSeconds = 10;
+let recStartTime = 0;
+let reviewFrames = [];
+let reviewIdx = 0;
+let isPlaying = false;
+let reviewIntervalMs = 1000 / (CAPTURE_FPS * PLAYBACK_SPEED);
+let playTimer = null;
+
+let buffer = [];
+const bufferMax = Math.round(CAPTURE_FPS * BUFFER_SECONDS);
+
+let currentColor = "#ff3b30";
+let lines = [];
+let drawing = false;
+let lastX = 0, lastY = 0;
+
+let soundEnabled = false;
+let soundThreshold = 20;
+let currentVolume = 0;
+let soundTriggerTs = null;
+let lastTriggerTime = 0;
+let audioCtx = null, analyser = null, micStream = null, volumeDataArray = null;
+let selectedMicId = "";
+
+const remoteVideo = document.getElementById("remoteVideo");
+const displayCanvas = document.getElementById("displayCanvas");
+const drawCanvas = document.getElementById("drawCanvas");
+const dctx = displayCanvas.getContext("2d");
+const lctx = drawCanvas.getContext("2d");
+const statusOverlay = document.getElementById("statusOverlay");
+
+const captureCanvas = document.createElement("canvas");
+const cctx = captureCanvas.getContext("2d");
+const bufferCanvas = document.createElement("canvas");
+const bctx = bufferCanvas.getContext("2d");
+
+function createReceiverPeer(myId) {
+  document.getElementById("myIdDisplay").textContent = myId;
+  peer = new Peer(myId, { debug: 1 });
+
+  peer.on("open", () => {
+    setStatus(`合言葉 [ ${myId} ] で待機中...`, "#00ff00");
+  });
+
+  peer.on("call", (call) => {
+    setStatus("映像受信用に応答中...", "#00e5ff");
+    call.answer();
+
+    call.on("stream", (stream) => {
+      remoteVideo.srcObject = stream;
+      remoteVideo.play().then(() => {
+        setStatus("LIVE - リアルタイム受信中", "#00ff00");
+        setupCanvasSize();
+        requestAnimationFrame(captureLoop);
+      }).catch(e => console.error("Play error:", e));
+    });
+  });
+
+  peer.on("error", (err) => {
+    if (err.type === "unavailable-id") {
+      const fallbackId = myId + "-1";
+      alert(`合言葉「${myId}」が使用中のため「${fallbackId}」で待機します。iPhone側も「${fallbackId}」で接続してください。`);
+      createReceiverPeer(fallbackId);
+    }
+  });
+}
+
+function initReceiver() {
+  document.getElementById("roleSelect").classList.add("hidden");
+  document.getElementById("receiverContainer").classList.remove("hidden");
+  createReceiverPeer(TARGET_FIXED_ID);
+  updateMicList();
+}
+
+function setupCanvasSize() {
+  captureCanvas.width = remoteVideo.videoWidth || 1280;
+  captureCanvas.height = remoteVideo.videoHeight || 720;
+  const aspect = captureCanvas.height / captureCanvas.width;
+  bufferCanvas.width = BUFFER_STORE_WIDTH;
+  bufferCanvas.height = Math.round(BUFFER_STORE_WIDTH * aspect);
+}
+
+// ----------------- バッファキャプチャ & 遅延再生描画 -----------------
+let lastCaptureTime = 0;
+let captureBusy = false;
+
+function captureLoop() {
+  const now = performance.now();
+  const minInterval = 1000 / CAPTURE_FPS;
+
+  if (now - lastCaptureTime >= minInterval && remoteVideo.videoWidth > 0) {
+    lastCaptureTime = now;
+
+    if (captureCanvas.width !== remoteVideo.videoWidth) setupCanvasSize();
+
+    cctx.drawImage(remoteVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+
+    // 遅延再生モードの処理
+    if (state === "DELAY") {
+      const targetTs = (Date.now() / 1000) - delaySeconds;
+      let closestFrame = null;
+      let minDiff = Infinity;
+      
+      for (let i = buffer.length - 1; i >= 0; i--) {
+        const diff = Math.abs(buffer[i].ts - targetTs);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestFrame = buffer[i];
+        } else {
+          break;
+        }
+      }
+
+      if (closestFrame) {
+        createImageBitmap(closestFrame.blob).then((bitmap) => {
+          drawSourceToDisplay(bitmap, bitmap.width, bitmap.height);
+          bitmap.close();
+        }).catch(e => console.warn(e));
+      }
+    } else if (state === "LIVE" || state === "RECORDING" || soundTriggerTs !== null) {
+      drawSourceToDisplay(captureCanvas, captureCanvas.width, captureCanvas.height);
+    }
+
+    if (!captureBusy) {
+      captureBusy = true;
+      bctx.drawImage(captureCanvas, 0, 0, bufferCanvas.width, bufferCanvas.height);
+      const realTs = Date.now() / 1000;
+      bufferCanvas.toBlob((blob) => {
+        if (blob) {
+          buffer.push({ ts: realTs, blob });
+          if (buffer.length > bufferMax) buffer.shift();
+        }
+        captureBusy = false;
+      }, "image/jpeg", JPEG_QUALITY);
+    }
+  }
+  requestAnimationFrame(captureLoop);
+}
+
+function drawSourceToDisplay(source, srcW, srcH) {
+  const w = displayCanvas.clientWidth;
+  const h = displayCanvas.clientHeight;
+  if (displayCanvas.width !== w) displayCanvas.width = w;
+  if (displayCanvas.height !== h) displayCanvas.height = h;
+
+  dctx.fillStyle = "#000";
+  dctx.fillRect(0, 0, w, h);
+  if (srcW > 0 && srcH > 0) {
+    const scale = Math.max(w / srcW, h / srcH);
+    const dw = srcW * scale, dh = srcH * scale;
+    const dx = (w - dw) / 2, dy = (h - dh) / 2;
+    dctx.drawImage(source, dx, dy, dw, dh);
+  }
+  redrawLines();
+}
+
+// ----------------- 再生・解析 -----------------
+let playbackBusy = false;
+
+async function showReviewFrame(idx) {
+  const entry = reviewFrames[idx];
+  if (!entry) return;
+  playbackBusy = true;
+  try {
+    const bitmap = await createImageBitmap(entry.blob);
+    drawSourceToDisplay(bitmap, bitmap.width, bitmap.height);
+    bitmap.close();
+  } catch (e) {
+    console.warn(e);
+  } finally {
+    playbackBusy = false;
+  }
+  setStatus(`コマ: ${idx + 1} / ${reviewFrames.length} (${isPlaying ? "スロー再生中" : "一時停止"})`, "#ffff00");
+}
+
+function startPlayTimer() {
+  stopPlayTimer();
+  playTimer = setInterval(() => {
+    if (!isPlaying || playbackBusy) return;
+    showReviewFrame(reviewIdx);
+    reviewIdx = (reviewIdx + 1) % reviewFrames.length;
+    document.getElementById("seekSlider").value = String(reviewIdx);
+  }, reviewIntervalMs);
+}
+
+function stopPlayTimer() {
+  if (playTimer) clearInterval(playTimer);
+  playTimer = null;
+}
+
+function finishClip(windowFrames) {
+  reviewFrames = windowFrames.map(f => ({ blob: f.blob, ts: f.ts }));
+  if (reviewFrames.length === 0) { state = "LIVE"; return; }
+
+  if (reviewFrames.length >= 2) {
+    const elapsed = reviewFrames[reviewFrames.length - 1].ts - reviewFrames[0].ts;
+    const realIntervalMs = (elapsed / (reviewFrames.length - 1)) * 1000;
+    reviewIntervalMs = Math.max(1, realIntervalMs / PLAYBACK_SPEED);
+  }
+
+  reviewIdx = 0;
+  isPlaying = true;
+  lines = [];
+  const seekSlider = document.getElementById("seekSlider");
+  seekSlider.max = String(reviewFrames.length - 1);
+  seekSlider.value = "0";
+  state = "REVIEW";
+  startPlayTimer();
+}
+
+// ----------------- 音検知機能 -----------------
+async function updateMicList() {
+  const micSelect = document.getElementById("micSelect");
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter(device => device.kind === 'audioinput');
+    
+    micSelect.innerHTML = "";
+    audioInputs.forEach((device, index) => {
+      const option = document.createElement("option");
+      option.value = device.deviceId;
+      option.text = device.label || `マイク ${index + 1}`;
+      micSelect.appendChild(option);
+    });
+    
+    if (audioInputs.length > 0 && !selectedMicId) {
+      selectedMicId = audioInputs[0].deviceId;
+    }
+  } catch (e) {
+    console.warn("マイク一覧の取得に失敗しました:", e);
+    micSelect.innerHTML = '<option value="">選択不可</option>';
+  }
+}
+
+async function startMic() {
+  if (micStream) {
+    micStream.getTracks().forEach(track => track.stop());
+  }
+
+  const constraints = {
+    audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
+  };
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia(constraints);
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    volumeDataArray = new Uint8Array(analyser.frequencyBinCount);
+    source.connect(analyser);
+    requestAnimationFrame(pollVolume);
+  } catch(e) {
+    console.warn("マイクの起動に失敗しました:", e);
+    alert("指定されたマイクを開けませんでした。自動音検知をオフにします。");
+    document.getElementById("chkSound").checked = false;
+    soundEnabled = false;
+    document.getElementById("volumeLabel").textContent = "OFF";
+  }
+}
+
+function pollVolume() {
+  if (analyser && soundEnabled) {
+    analyser.getByteTimeDomainData(volumeDataArray);
+    let sum = 0;
+    for (let i = 0; i < volumeDataArray.length; i++) {
+      const v = (volumeDataArray[i] - 128) / 128;
+      sum += v * v;
+    }
+    currentVolume = Math.sqrt(sum / volumeDataArray.length) * 300;
+    document.getElementById("volumeLabel").textContent = `${currentVolume.toFixed(0)}/${soundThreshold}`;
+
+    const now = Date.now() / 1000;
+    if (soundTriggerTs === null && currentVolume > soundThreshold && (now - lastTriggerTime) > TRIGGER_COOLDOWN_SECONDS) {
+      lastTriggerTime = now;
+      soundTriggerTs = now;
+      stopPlayTimer();
+      isPlaying = false;
+    }
+    requestAnimationFrame(pollVolume);
+  }
+}
+
+// ----------------- イベントリスナー & 描画 -----------------
+document.getElementById("micSelect").addEventListener("change", (e) => {
+  selectedMicId = e.target.value;
+  if (soundEnabled) startMic();
+});
+
+document.getElementById("btnDelay").addEventListener("click", () => {
+  stopPlayTimer();
+  isPlaying = false;
+  lines = [];
+  state = "DELAY";
+  setStatus(`⏱ 遅延再生中 (${delaySeconds.toFixed(1)}秒遅延)`, "#ff9800");
+});
+
+document.getElementById("btnRec").addEventListener("click", () => {
+  stopPlayTimer();
+  recStartTime = Date.now() / 1000;
+  state = "RECORDING";
+});
+
+document.getElementById("btnPlay").addEventListener("click", () => {
+  if (state !== "REVIEW") return;
+  isPlaying = !isPlaying;
+  if (isPlaying) startPlayTimer(); else stopPlayTimer();
+});
+
+document.getElementById("btnPrev").addEventListener("click", () => {
+  if (state !== "REVIEW") return;
+  isPlaying = false; stopPlayTimer();
+  reviewIdx = (reviewIdx - 1 + reviewFrames.length) % reviewFrames.length;
+  document.getElementById("seekSlider").value = String(reviewIdx);
+  showReviewFrame(reviewIdx);
+});
+
+document.getElementById("btnNext").addEventListener("click", () => {
+  if (state !== "REVIEW") return;
+  isPlaying = false; stopPlayTimer();
+  reviewIdx = (reviewIdx + 1) % reviewFrames.length;
+  document.getElementById("seekSlider").value = String(reviewIdx);
+  showReviewFrame(reviewIdx);
+});
+
+document.getElementById("btnLive").addEventListener("click", () => {
+  stopPlayTimer();
+  isPlaying = false;
+  lines = [];
+  state = "LIVE";
+  setStatus("LIVE - リアルタイム受信中", "#00ff00");
+});
+
+document.getElementById("btnClear").addEventListener("click", () => { lines = []; redrawLines(); });
+
+document.getElementById("delaySlider").addEventListener("input", (e) => {
+  delaySeconds = parseFloat(e.target.value);
+  document.getElementById("delayLabel").textContent = `遅延時間: ${delaySeconds.toFixed(1)}秒`;
+  if (state === "DELAY") {
+    setStatus(`⏱ 遅延再生中 (${delaySeconds.toFixed(1)}秒遅延)`, "#ff9800");
+  }
+});
+
+document.getElementById("recSlider").addEventListener("input", (e) => {
+  recordSeconds = parseInt(e.target.value, 10);
+  document.getElementById("recLabel").textContent = `録画時間: ${recordSeconds}秒`;
+  document.getElementById("btnRec").textContent = `🔴 ${recordSeconds}秒`;
+});
+
+document.getElementById("seekSlider").addEventListener("input", (e) => {
+  if (state !== "REVIEW") return;
+  isPlaying = false; stopPlayTimer();
+  reviewIdx = parseInt(e.target.value, 10);
+  showReviewFrame(reviewIdx);
+});
+
+document.getElementById("thresholdSlider").addEventListener("input", (e) => {
+  soundThreshold = parseInt(e.target.value, 10);
+});
+
+document.getElementById("chkSound").addEventListener("change", (e) => {
+  soundEnabled = e.target.checked;
+  if (soundEnabled) {
+    startMic();
+  } else {
+    document.getElementById("volumeLabel").textContent = "OFF";
+  }
+});
+
+document.querySelectorAll(".colorBtn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    currentColor = btn.dataset.color;
+    document.querySelectorAll(".colorBtn").forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+  });
+});
+
+// 線引きジェスチャー
+function getPos(e) {
+  const rect = drawCanvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+}
+drawCanvas.addEventListener("touchstart", (e) => {
+  if (state !== "REVIEW" && state !== "DELAY") return;
+  e.preventDefault(); drawing = true;
+  const p = getPos(e); lastX = p.x; lastY = p.y;
+}, { passive: false });
+
+drawCanvas.addEventListener("touchmove", (e) => {
+  if (!drawing) return;
+  e.preventDefault();
+  const p = getPos(e);
+  lines.push({ x1: lastX, y1: lastY, x2: p.x, y2: p.y, color: currentColor });
+  lastX = p.x; lastY = p.y;
+  redrawLines();
+}, { passive: false });
+
+drawCanvas.addEventListener("touchend", () => drawing = false);
+
+function redrawLines() {
+  const w = drawCanvas.clientWidth, h = drawCanvas.clientHeight;
+  if (drawCanvas.width !== w) drawCanvas.width = w;
+  if (drawCanvas.height !== h) drawCanvas.height = h;
+  lctx.clearRect(0, 0, w, h);
+  lctx.lineCap = "round"; lctx.lineWidth = 4;
+  for (const l of lines) {
+    lctx.strokeStyle = l.color;
+    lctx.beginPath();
+    lctx.moveTo(l.x1, l.y1);
+    lctx.lineTo(l.x2, l.y2);
+    lctx.stroke();
+  }
+}
+
+function setStatus(text, color) {
+  statusOverlay.textContent = text;
+  statusOverlay.style.color = color || "#00ff00";
+}
+
+// 監視ループ
+function watchLoop() {
+  const now = Date.now() / 1000;
+  if (soundTriggerTs !== null) {
+    const elapsed = now - soundTriggerTs;
+    setStatus(`🔊インパクト検知! 残り ${Math.max(0, POST_SECONDS - elapsed).toFixed(1)}s`, "#ff9100");
+    if (elapsed >= POST_SECONDS) {
+      const triggerTs = soundTriggerTs;
+      soundTriggerTs = null;
+      const windowFrames = buffer.filter(f => f.ts >= (triggerTs - PRE_SECONDS) && f.ts <= (triggerTs + POST_SECONDS))
+        .sort((a, b) => a.ts - b.ts);
+      finishClip(windowFrames);
+    }
+  } else if (state === "RECORDING") {
+    const elapsed = now - recStartTime;
+    setStatus(`🔴 録画中... 残り ${Math.max(0, recordSeconds - elapsed).toFixed(1)}s`, "#ff3d00");
+    if (elapsed >= recordSeconds) {
+      const windowFrames = buffer.filter(f => f.ts >= (now - recordSeconds)).sort((a, b) => a.ts - b.ts);
+      finishClip(windowFrames);
+    }
+  }
+  requestAnimationFrame(watchLoop);
+}
+
+navigator.mediaDevices.addEventListener('devicechange', updateMicList);
+
+watchLoop();
+</script>
+</body>
+</html>
