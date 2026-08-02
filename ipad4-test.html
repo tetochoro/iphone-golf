@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>2台連携 ゴルフスイング解析システム (四隅分散・大型UI版)</title>
+<title>2台連携 ゴルフスイング解析システム (左側スリム縦長UI版)</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -66,16 +66,16 @@
   }
   .top-slider-group label { font-size: 13px; color: #00e5ff; font-weight: bold; white-space: nowrap; }
 
-  /* ---------------- 左側エリア (設定・感度・録画時間) ---------------- */
+  /* ---------------- 左側エリア (超スリム・縦長配置改修) ---------------- */
   #leftOverlay {
     top: calc(64px + env(safe-area-inset-top)); left: 12px;
-    width: 170px; padding: 12px;
-    display: flex; flex-direction: column; gap: 12px;
+    width: 120px; padding: 10px 8px;
+    display: flex; flex-direction: column; gap: 14px;
   }
 
   .control-unit { display: flex; flex-direction: column; gap: 4px; }
-  .control-unit label { font-size: 12px; color: #aaa; font-weight: bold; }
-  .val-disp { font-size: 13px; color: #00e5ff; font-weight: bold; }
+  .control-unit label { font-size: 11px; color: #aaa; font-weight: bold; line-height: 1.2; }
+  .val-disp { font-size: 11px; color: #00e5ff; font-weight: bold; }
 
   /* ---------------- 右側エリア (描画カラー＆消去・大型縦並び) ---------------- */
   #rightOverlay {
@@ -100,9 +100,9 @@
 
   /* スライダー共通デザイン */
   input[type=range] { width: 100%; height: 24px; -webkit-appearance: none; background: transparent; }
-  input[type=range]::-webkit-slider-runnable-track { height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; }
+  input[type=range]::-webkit-slider-runnable-track { height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%;
+    -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
     background: #fff; border: 2px solid #000; margin-top: -8px; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
   }
 
@@ -125,7 +125,7 @@
 
   #micSelect {
     background: rgba(40, 40, 40, 0.9); color: #00e5ff; border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 8px; font-size: 11px; height: 32px; width: 100%; font-weight: bold; padding: 0 4px;
+    border-radius: 6px; font-size: 10px; height: 28px; width: 100%; font-weight: bold; padding: 0 2px;
   }
   
   .hidden { display: none !important; }
@@ -156,7 +156,7 @@
     </div>
   </div>
 
-  <!-- 3. iPad (受信・スイング解析) UI - 四隅分散型全画面オーバーレイ -->
+  <!-- 3. iPad (受信・スイング解析) UI - スリム＆縦長UI版 -->
   <div id="receiverContainer" class="hidden">
     
     <!-- 全画面映像表示エリア -->
@@ -166,7 +166,7 @@
       <canvas id="drawCanvas"></canvas>
     </div>
 
-    <!-- 【上部】ステータス & 遅延スライダー (1行スリム化) -->
+    <!-- 【上部】ステータス & 遅延スライダー -->
     <div id="topOverlay" class="overlay-panel">
       <div class="status-badge">合言葉: 1212 | <span id="statusOverlay">待機中...</span></div>
       <div class="top-slider-group">
@@ -175,17 +175,17 @@
       </div>
     </div>
 
-    <!-- 【左側】音検知・録画時間設定パネル -->
+    <!-- 【左側】音検知・録画時間設定パネル (120px スリム＆縦長) -->
     <div id="leftOverlay" class="overlay-panel">
       <div class="control-unit">
-        <label>🔊 インパクト自動録画</label>
-        <label style="display:flex; align-items:center; gap:6px; color:#00e5ff; cursor:pointer;">
-          <input type="checkbox" id="chkSound" style="width:20px; height:20px;"> 有効化
+        <label>🔊 自動録画</label>
+        <label style="display:flex; align-items:center; gap:4px; color:#00e5ff; cursor:pointer; font-size:12px; font-weight:bold; margin-top:2px;">
+          <input type="checkbox" id="chkSound" style="width:18px; height:18px;"> ON
         </label>
       </div>
 
       <div class="control-unit">
-        <label>マイク選択</label>
+        <label>マイク</label>
         <select id="micSelect"><option value="">検索中...</option></select>
       </div>
 
@@ -194,8 +194,8 @@
         <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20">
       </div>
 
-      <div class="control-unit" style="margin-top:4px;">
-        <label id="recLabel">🔴 録画: 10秒</label>
+      <div class="control-unit">
+        <label id="recLabel">🔴 録画: 10s</label>
         <input type="range" id="recSlider" min="1" max="30" step="1" value="10">
       </div>
     </div>
@@ -219,8 +219,8 @@
       <button id="btnPrev" class="largeBtn icon-only">◀</button>
       <button id="btnNext" class="largeBtn icon-only">▶</button>
       
-      <!-- コマ送り用スライダー (コンパクト化) -->
-      <div style="width:100px; display:flex; flex-direction:column; gap:2px;">
+      <!-- コマ送り用スライダー -->
+      <div style="width:90px; display:flex; flex-direction:column; gap:2px;">
         <span style="font-size:10px; color:#aaa; text-align:center;">コマ送り</span>
         <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
       </div>
@@ -635,7 +635,7 @@ document.getElementById("delaySlider").addEventListener("input", (e) => {
 
 document.getElementById("recSlider").addEventListener("input", (e) => {
   recordSeconds = parseInt(e.target.value, 10);
-  document.getElementById("recLabel").textContent = `🔴 録画: ${recordSeconds}秒`;
+  document.getElementById("recLabel").textContent = `🔴 録画: ${recordSeconds}s`;
   document.getElementById("btnRec").textContent = `🔴 ${recordSeconds}秒録画`;
 });
 
