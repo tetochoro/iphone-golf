@@ -105,6 +105,10 @@
     height: 50px; justify-content: space-between;
     gap: 6px;
   }
+  #modeStatus {
+    flex: 1; text-align: center; font-size: 14px; font-weight: 800;
+    letter-spacing: 1px; white-space: nowrap; color: #00ff00;
+  }
 
   /* 小型カラーパレット */
   .color-group { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
@@ -221,11 +225,12 @@
 
     <!-- 【 下部バー・操作ボタン 】 -->
     <div id="bottomBar2" class="bar-overlay">
-      <button id="btnDelay" class="largeBtn delay">⏱遅延</button>
-      <button id="btnRec" class="largeBtn rec">🔴10s</button>
+      <button id="btnDelay" class="largeBtn delay icon-only" title="遅延再生開始">⏱</button>
+      <button id="btnRec" class="largeBtn rec icon-only" title="録画開始">🔴</button>
       <button id="btnPlay" class="largeBtn icon-only">⏯</button>
+      <div id="modeStatus">LIVE</div>
       <button id="btnClear" class="largeBtn danger icon-only" title="線を消す">🧹</button>
-      <button id="btnLive" class="largeBtn live">📹生</button>
+      <button id="btnLive" class="largeBtn live icon-only" title="ライブに戻る">📹</button>
     </div>
 
   </div>
@@ -631,7 +636,6 @@ document.getElementById("delaySlider").addEventListener("input", (e) => {
 document.getElementById("recSlider").addEventListener("input", (e) => {
   recordSeconds = parseInt(e.target.value, 10);
   document.getElementById("recLabel").textContent = `🔴${recordSeconds}s`;
-  document.getElementById("btnRec").textContent = `🔴${recordSeconds}s`;
 });
 
 document.getElementById("seekSlider").addEventListener("input", (e) => {
@@ -669,7 +673,7 @@ function getPos(e) {
   return { x: t.clientX - rect.left, y: t.clientY - rect.top };
 }
 drawCanvas.addEventListener("touchstart", (e) => {
-  if (state !== "REVIEW" && state !== "DELAY") return;
+  // どの画面(ライブ・遅延再生・録画中・コマ送り)でも線を描けるようにする
   e.preventDefault(); drawing = true;
   const p = getPos(e); lastX = p.x; lastY = p.y;
 }, { passive: false });
@@ -708,6 +712,10 @@ function setStatus(text, color) {
 // 監視ループ
 function watchLoop() {
   const now = Date.now() / 1000;
+
+  // 下部バーの状態表示(LIVE/遅延再生/録画中/コマ送り)を更新する
+  updateModeStatus();
+
   if (soundTriggerTs !== null) {
     const elapsed = now - soundTriggerTs;
     setStatus(`🔊検知!${Math.max(0, POST_SECONDS - elapsed).toFixed(1)}s`, "#ff9100");
@@ -727,6 +735,22 @@ function watchLoop() {
     }
   }
   requestAnimationFrame(watchLoop);
+}
+
+function updateModeStatus() {
+  const el = document.getElementById("modeStatus");
+  if (!el) return;
+  if (soundTriggerTs !== null) {
+    el.textContent = "🔊検知中"; el.style.color = "#ff9100";
+  } else if (state === "LIVE") {
+    el.textContent = "● LIVE"; el.style.color = "#00ff00";
+  } else if (state === "DELAY") {
+    el.textContent = "⏱ 遅延再生"; el.style.color = "#ff9800";
+  } else if (state === "RECORDING") {
+    el.textContent = "🔴 録画中"; el.style.color = "#ff3d00";
+  } else if (state === "REVIEW") {
+    el.textContent = "▶ コマ送り"; el.style.color = "#ffcc00";
+  }
 }
 
 navigator.mediaDevices.addEventListener('devicechange', updateMicList);
