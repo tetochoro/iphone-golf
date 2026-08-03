@@ -44,6 +44,12 @@
 
   /* 映像エリア */
   #videoWrap { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+  #statusOverlay {
+    position: absolute; top: calc(6px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.55); padding: 4px 14px; border-radius: 10px;
+    font-size: 13px; font-weight: 700; white-space: nowrap; z-index: 8; pointer-events: none;
+    color: #00ff00;
+  }
   video#remoteVideo { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   canvas#displayCanvas, canvas#drawCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
   #drawCanvas { touch-action: none; }
@@ -59,46 +65,34 @@
     max-width: calc(100% - 12px - env(safe-area-inset-left) - env(safe-area-inset-right));
   }
 
-  /* ---------------- 上部バー(2段に分割し、縦画面の幅に収める) ---------------- */
-  #topBar1 {
+  /* ---------------- 上部バー(スライダー専用行 + 音検知行) ---------------- */
+  #topBarSliders {
     top: calc(4px + env(safe-area-inset-top));
     left: calc(6px + env(safe-area-inset-left));
     right: calc(6px + env(safe-area-inset-right));
-    height: 32px; justify-content: space-between;
-    overflow-x: auto;
-    white-space: nowrap;
+    height: 46px; justify-content: space-between;
+    gap: 10px;
   }
   #topBar2 {
-    top: calc(4px + 32px + 4px + env(safe-area-inset-top));
+    top: calc(4px + 46px + 4px + env(safe-area-inset-top));
     left: calc(6px + env(safe-area-inset-left));
     right: calc(6px + env(safe-area-inset-right));
-    height: 30px; justify-content: space-around;
+    height: 38px; justify-content: space-around;
     overflow-x: auto;
     white-space: nowrap;
   }
   
-  .status-badge { font-size: 10px; font-weight: bold; color: #0f0; white-space: nowrap; flex-shrink: 0; }
-  
-  .top-item { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-  .top-item label { font-size: 9px; color: #aaa; font-weight: bold; white-space: nowrap; }
-  .val-disp { font-size: 9px; color: #00e5ff; font-weight: bold; }
+  .top-item { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .top-item label { font-size: 12px; color: #aaa; font-weight: bold; white-space: nowrap; }
+  .val-disp { font-size: 12px; color: #00e5ff; font-weight: bold; }
 
-  /* ---------------- 下部バー(2段に分割し、縦画面の幅に収める) ---------------- */
-  #bottomBar1 {
-    bottom: calc(4px + 40px + 4px + env(safe-area-inset-bottom));
-    left: calc(6px + env(safe-area-inset-left));
-    right: calc(6px + env(safe-area-inset-right));
-    height: 30px; justify-content: center;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
+  /* ---------------- 下部バー(操作ボタン行のみ) ---------------- */
   #bottomBar2 {
     bottom: calc(4px + env(safe-area-inset-bottom));
     left: calc(6px + env(safe-area-inset-left));
     right: calc(6px + env(safe-area-inset-right));
-    height: 40px; justify-content: space-between;
-    overflow-x: auto;
-    white-space: nowrap;
+    height: 50px; justify-content: space-between;
+    gap: 6px;
   }
 
   /* 小型カラーパレット */
@@ -109,18 +103,18 @@
   }
   .colorBtn.selected { border-color: #fff; transform: scale(1.1); box-shadow: 0 0 6px #fff; }
 
-  /* スライダーデザイン */
-  input[type=range] { height: 16px; -webkit-appearance: none; background: transparent; }
-  input[type=range]::-webkit-slider-runnable-track { height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; }
+  /* スライダーデザイン(操作しやすい大きさに) */
+  input[type=range] { height: 30px; -webkit-appearance: none; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 6px; background: rgba(255,255,255,0.25); border-radius: 3px; }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
-    background: #fff; border: 1.5px solid #000; margin-top: -4px; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; border: 2px solid #000; margin-top: -10px; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
 
-  /* 超コンパクトボタン */
+  /* タップしやすい大きさのボタン */
   button.largeBtn {
-    font-size: 10px; font-weight: bold; height: 28px; padding: 0 6px;
-    border: none; border-radius: 6px; color: #fff;
+    font-size: 14px; font-weight: bold; height: 42px; min-width: 42px; padding: 0 12px;
+    border: none; border-radius: 8px; color: #fff;
     background: rgba(50, 50, 55, 0.9);
     display: inline-flex; align-items: center; justify-content: center; gap: 2px;
     cursor: pointer; border: 1px solid rgba(255,255,255,0.2);
@@ -132,11 +126,11 @@
   button.rec { background: rgba(46, 125, 50, 0.9); }
   button.danger { background: rgba(198, 40, 40, 0.9); }
   button.live { background: rgba(2, 136, 209, 0.9); }
-  button.icon-only { width: 28px; padding: 0; font-size: 12px; }
+  button.icon-only { width: 42px; padding: 0; font-size: 18px; }
 
-  #micSelect {
+  #micSelect, #thresholdSelect {
     background: rgba(40, 40, 40, 0.9); color: #00e5ff; border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 4px; font-size: 9px; height: 20px; font-weight: bold; padding: 0 1px; max-width: 55px;
+    border-radius: 6px; font-size: 13px; height: 30px; font-weight: bold; padding: 0 4px; max-width: 80px;
   }
   
   .hidden { display: none !important; }
@@ -175,23 +169,26 @@
       <video id="remoteVideo" autoplay playsinline muted></video>
       <canvas id="displayCanvas"></canvas>
       <canvas id="drawCanvas"></canvas>
+      <div id="statusOverlay"></div>
     </div>
 
-    <!-- 【 1行目：上部バー(1段目) 】 -->
-    <div id="topBar1" class="bar-overlay">
-      <div class="status-badge">1212|<span id="statusOverlay">待機</span></div>
-
-      <div class="top-item">
-        <label id="delayLabel" style="color:#00e5ff;">⏱ 3.0s</label>
-        <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0" style="width:60px;">
+    <!-- 【 スライダー専用行(最上部) 】 -->
+    <div id="topBarSliders" class="bar-overlay">
+      <div class="top-item" style="flex:1;">
+        <label id="delayLabel" style="color:#00e5ff;">⏱遅延 3.0s</label>
+        <input type="range" id="delaySlider" min="1" max="15" step="0.5" value="3.0" style="flex:1; width:auto;">
+      </div>
+      <div class="top-item" style="flex:1;">
+        <label id="recLabel">🔴録画 10s</label>
+        <input type="range" id="recSlider" min="1" max="30" step="1" value="10" style="flex:1; width:auto;">
       </div>
     </div>
 
-    <!-- 【 1行目：上部バー(2段目) 】 -->
+    <!-- 【 音検知設定行 】 -->
     <div id="topBar2" class="bar-overlay">
       <div class="top-item">
         <label style="color:#00e5ff; cursor:pointer;">
-          <input type="checkbox" id="chkSound" style="width:12px; height:12px; vertical-align:middle;"> 音検知
+          <input type="checkbox" id="chkSound" style="width:18px; height:18px; vertical-align:middle;"> 音検知
         </label>
       </div>
 
@@ -201,44 +198,26 @@
 
       <div class="top-item">
         <label>感度:<span id="volumeLabel" class="val-disp">OFF</span></label>
-        <input type="range" id="thresholdSlider" min="1" max="100" step="1" value="20" style="width:35px;">
-      </div>
-
-      <div class="top-item">
-        <label id="recLabel">🔴10s</label>
-        <input type="range" id="recSlider" min="1" max="30" step="1" value="10" style="width:35px;">
+        <select id="thresholdSelect">
+          <!-- 5刻みの選択肢はJSで自動生成する -->
+        </select>
       </div>
     </div>
 
-    <!-- 【 2行目：下部バー(1段目・カラー選択) 】 -->
-    <div id="bottomBar1" class="bar-overlay">
-      <div class="color-group">
-        <button class="colorBtn selected" style="background:#ff3b30" data-color="#ff3b30"></button>
-        <button class="colorBtn" style="background:#ffcc00" data-color="#ffcc00"></button>
-        <button class="colorBtn" style="background:#34c759" data-color="#34c759"></button>
-        <button class="colorBtn" style="background:#0a84ff" data-color="#0a84ff"></button>
-        <button class="colorBtn" style="background:#ffffff" data-color="#ffffff"></button>
-        <button id="btnClear" class="largeBtn danger icon-only" style="height:22px; width:22px; font-size:10px;" title="消去">🧹</button>
-      </div>
-    </div>
-
-    <!-- 【 2行目：下部バー(2段目・操作ボタン) 】 -->
+    <!-- 【 下部バー・操作ボタン 】 -->
     <div id="bottomBar2" class="bar-overlay">
-      <div style="display:flex; align-items:center; gap:3px;">
-        <button id="btnDelay" class="largeBtn delay">⏱遅延</button>
-        <button id="btnRec" class="largeBtn rec">🔴10s</button>
-        <button id="btnPlay" class="largeBtn icon-only">⏯</button>
-        <button id="btnPrev" class="largeBtn icon-only">◀</button>
-        <button id="btnNext" class="largeBtn icon-only">▶</button>
+      <button id="btnDelay" class="largeBtn delay">⏱遅延</button>
+      <button id="btnRec" class="largeBtn rec">🔴10s</button>
+      <button id="btnPlay" class="largeBtn icon-only">⏯</button>
 
-        <!-- コマ送りスライダー -->
-        <div style="width:45px; display:flex; flex-direction:column; gap:0px;">
-          <span style="font-size:7px; color:#aaa; text-align:center; line-height:1;">コマ送</span>
-          <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
-        </div>
-
-        <button id="btnLive" class="largeBtn live">📹生</button>
+      <!-- コマ送りスライダー -->
+      <div style="flex:1; display:flex; flex-direction:column; gap:0px; min-width:60px;">
+        <span style="font-size:9px; color:#aaa; text-align:center; line-height:1;">コマ送り</span>
+        <input type="range" id="seekSlider" min="0" max="100" step="1" value="0">
       </div>
+
+      <button id="btnClear" class="largeBtn danger icon-only" title="線を消す">🧹</button>
+      <button id="btnLive" class="largeBtn live">📹生</button>
     </div>
 
   </div>
@@ -585,6 +564,19 @@ function pollVolume() {
 }
 
 // ----------------- イベントリスナー -----------------
+
+// 感度ドロップダウンの選択肢を5刻みで生成する(5, 10, 15, ... 100)
+(function initThresholdSelect() {
+  const sel = document.getElementById("thresholdSelect");
+  for (let v = 5; v <= 100; v += 5) {
+    const opt = document.createElement("option");
+    opt.value = String(v);
+    opt.textContent = String(v);
+    if (v === soundThreshold) opt.selected = true;
+    sel.appendChild(opt);
+  }
+})();
+
 document.getElementById("micSelect").addEventListener("change", (e) => {
   selectedMicId = e.target.value;
   if (soundEnabled) startMic();
@@ -608,22 +600,6 @@ document.getElementById("btnPlay").addEventListener("click", () => {
   if (state !== "REVIEW") return;
   isPlaying = !isPlaying;
   if (isPlaying) startPlayTimer(); else stopPlayTimer();
-});
-
-document.getElementById("btnPrev").addEventListener("click", () => {
-  if (state !== "REVIEW") return;
-  isPlaying = false; stopPlayTimer();
-  reviewIdx = (reviewIdx - 1 + reviewFrames.length) % reviewFrames.length;
-  document.getElementById("seekSlider").value = String(reviewIdx);
-  showReviewFrame(reviewIdx);
-});
-
-document.getElementById("btnNext").addEventListener("click", () => {
-  if (state !== "REVIEW") return;
-  isPlaying = false; stopPlayTimer();
-  reviewIdx = (reviewIdx + 1) % reviewFrames.length;
-  document.getElementById("seekSlider").value = String(reviewIdx);
-  showReviewFrame(reviewIdx);
 });
 
 document.getElementById("btnLive").addEventListener("click", () => {
@@ -657,7 +633,7 @@ document.getElementById("seekSlider").addEventListener("input", (e) => {
   showReviewFrame(reviewIdx);
 });
 
-document.getElementById("thresholdSlider").addEventListener("input", (e) => {
+document.getElementById("thresholdSelect").addEventListener("change", (e) => {
   soundThreshold = parseInt(e.target.value, 10);
 });
 
